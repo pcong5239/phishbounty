@@ -185,3 +185,138 @@ class Contract(gl.Contract):
             "bounty_amount": bounty,
             "required_stake": req_stake,
         }
+
+    @gl.public.write
+    def submit_report(self, brand_id: u256, suspect_url: str) -> u256:
+        # Guard 1: URL length & scheme
+        if len(suspect_url) > MAX_URL_LEN:
+            raise ValueError("ERR_URL_LENGTH")
+
+        if suspect_url.startswith("http://"):
+            rest = suspect_url[7:]
+        elif suspect_url.startswith("https://"):
+            rest = suspect_url[8:]
+        else:
+            raise ValueError("ERR_URL_SCHEME")
+
+        # Guard 2: Extract hostname & normalize
+        host_segment = rest.split("/")[0].split("?")[0].split("#")[0]
+        if "@" in host_segment:
+            raise ValueError("ERR_DOMAIN_FORMAT")
+
+        host = host_segment.split(":")[0]
+        norm_domain = _normalize_domain(host)
+
+        # Guard 3: Registry checks
+        if self._registry().is_official_domain(norm_domain):
+            raise ValueError("ERR_OFFICIAL_DOMAIN")
+
+        brand_info = self._registry().get_brand(brand_id)
+        if not brand_info["active"]:
+            raise ValueError("ERR_BRAND_INACTIVE")
+
+        if self._sender() == Address(brand_info["admin"]):
+            raise ValueError("ERR_SELF_REPORT")
+
+        # Guard 4: Pool checks
+        bounty = self.pool_bounty.get(brand_id, 0)
+        if bounty == 0:
+            raise ValueError("ERR_NO_BOUNTY")
+
+        bal = self.pool_balance.get(brand_id, 0)
+        res = self.pool_reserved.get(brand_id, 0)
+        if bal - res < bounty:
+            raise ValueError("ERR_POOL_INSUFFICIENT")
+
+        # Guard 5: Domain checks
+        if self.pending_domain.get(norm_domain, 0) != 0:
+            raise ValueError("ERR_DUPLICATE_PENDING")
+
+        if self.confirmed_domain.get(norm_domain, 0) != 0:
+            if self._blocklist_state(norm_domain) != 2:
+                raise ValueError("ERR_ALREADY_CONFIRMED")
+
+        # Guard 6: Hunter checks
+        open_count = self.hunter_open_count.get(self._sender(), 0)
+        if open_count >= MAX_OPEN_PER_HUNTER:
+            raise ValueError("ERR_OPEN_CAP")
+
+        req_stake = self.get_required_stake(brand_id)
+        if self._value() != req_stake:
+            raise ValueError("ERR_STAKE_AMOUNT")
+
+        # Persistence & Effects
+        self.report_count += 1
+        rid = self.report_count
+
+        self.report_brand[rid] = brand_id
+        self.report_hunter[rid] = self._sender()
+        self.report_url[rid] = suspect_url
+        self.report_domain[rid] = norm_domain
+        self.report_stake[rid] = self._value()
+        self.report_bounty[rid] = bounty
+        self.report_status[rid] = STATUS_SUBMITTED
+        self.report_verdict[rid] = VERDICT_NONE
+        self.report_confidence[rid] = 0
+        self.report_signals[rid] = DynArray()
+        self.report_reason[rid] = ""
+        self.report_submitted_at[rid] = self._now()
+        self.report_adjudicated_at[rid] = 0
+        self.report_appeal_deadline[rid] = 0
+        self.report_appellant[rid] = Address("0x0000000000000000000000000000000000000000")
+        self.report_appeal_stake[rid] = 0
+        self.report_retry[rid] = 0
+
+        self.pool_reserved[brand_id] = res + bounty
+        self.pending_domain[norm_domain] = rid
+        self.hunter_open_count[self._sender()] = open_count + 1
+
+        return rid
+
+    @gl.public.write
+    def adjudicate(self, report_id: u256) -> None:
+        if report_id not in self.report_brand:
+            raise ValueError("ERR_NOT_FOUND")
+        if self.report_status[report_id] != STATUS_SUBMITTED:
+            raise ValueError("ERR_NOT_SUBMITTED")
+        raise NotImplementedError("ERR_PHASE3")
+
+    @gl.public.view
+    def get_report(self, report_id: u256) -> dict:
+        if report_id not in self.report_brand:
+            raise ValueError("ERR_NOT_FOUND")
+
+        return {
+            "id": report_id,
+            "brand_id": self.report_brand[report_id],
+            "hunter": str(self.report_hunter[report_id]),
+            "suspect_url": self.report_url[report_id],
+            "suspect_domain": self.report_domain[report_id],
+            "stake": self.report_stake[report_id],
+            "bounty": self.report_bounty[report_id],
+            "status": self.report_status[report_id],
+            "verdict": self.report_verdict[report_id],
+            "confidence": self.report_confidence[report_id],
+            "signals": list(self.report_signals[report_id]),
+            "reason": self.report_reason[report_id],
+            "submitted_at": self.report_submitted_at[report_id],
+            "adjudicated_at": self.report_adjudicated_at[report_id],
+            "appeal_deadline": self.report_appeal_deadline[report_id],
+            "appellant": str(self.report_appellant[report_id]),
+            "appeal_stake": self.report_appeal_stake[report_id],
+            "retry_count": self.report_retry[report_id],
+        }
+
+    @gl.public.view
+    def get_report_count(self) -> u256:
+        return self.report_count
+
+    @gl.public.view
+    def get_hunter_stats(self, addr: Address) -> dict:
+        a = Address(addr)
+        return {
+            "open": self.hunter_open_count.get(a, 0),
+            "confirmed": self.hunter_confirmed_count.get(a, 0),
+            "cleared": self.hunter_cleared_count.get(a, 0),
+            "suspicious": self.hunter_suspicious_count.get(a, 0),
+        }
