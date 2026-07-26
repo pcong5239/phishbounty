@@ -70,7 +70,7 @@ def test_domain_normalization(registry):
 
 
 def test_domain_format_rejects(registry):
-    # 6. format rejects: "https://x.com", "x.com/path", "user@x.com", "x.com:443", "192.168.0.1", "[::1]", "com", "-bad.com", "a..b.com" -> ERR_DOMAIN_FORMAT
+    # 6. format rejects: "https://x.com", "x.com/path", "user@x.com", "x.com:443", "192.168.0.1", "[::1]", "com", "-bad.com", "a..b.com", "999.1.2.3", "12345.678" -> ERR_DOMAIN_FORMAT
     bad_domains = [
         "https://x.com",
         "x.com/path",
@@ -81,11 +81,17 @@ def test_domain_format_rejects(registry):
         "com",
         "-bad.com",
         "a..b.com",
+        "999.1.2.3",
+        "12345.678",
     ]
 
     for bad in bad_domains:
         with pytest.raises(ValueError, match="ERR_DOMAIN_FORMAT"):
             registry.register_brand(f"Brand {bad}", bad, "Scope")
+
+    # "3m.com" still accepted
+    id_3m = registry.register_brand("Brand 3M", "3m.com", "Scope")
+    assert registry.get_brand(id_3m)["domains"] == ["3m.com"]
 
 
 def test_global_uniqueness(registry):

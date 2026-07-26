@@ -35,6 +35,9 @@ def _normalize_domain(raw: str) -> str:
     if len(labels) < 2:
         raise ValueError("ERR_DOMAIN_FORMAT")
 
+    if all(label.isdigit() for label in labels):
+        raise ValueError("ERR_DOMAIN_FORMAT")
+
     if len(labels) == 4 and all(label.isdigit() for label in labels):
         if all(0 <= int(label) <= 255 for label in labels):
             raise ValueError("ERR_DOMAIN_FORMAT")
