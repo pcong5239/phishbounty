@@ -3,6 +3,8 @@ import type { FormEvent } from "react";
 import { useRead } from "../lib/useRead";
 import { getDomainHistory, getDomainState, getRecentEvents } from "../lib/queries";
 import { Badge, Empty, ErrorBox, Skeleton } from "../components/ui";
+import { TxAction } from "../components/TxAction";
+import { CORE_ADDRESS } from "../config/contracts";
 import {
   domainStateLabel,
   eventKindLabel,
@@ -51,6 +53,24 @@ function DomainLookup({ domain }: { domain: string }) {
           This domain has never been listed.
         </p>
       )}
+
+      {toNumber(lookup.data.state) === 1 ? (
+        <div style={{ marginTop: 16 }}>
+          <TxAction
+            label="Re-verify this domain"
+            address={CORE_ADDRESS}
+            functionName="reverify"
+            args={[domain]}
+            onDone={lookup.retry}
+          >
+            <p className="lead" style={{ margin: 0 }}>
+              Re-verification asks validators whether the page is still impersonating. If it is
+              gone or now benign, the domain is marked neutralized. Available once the cooldown
+              since the last event has elapsed.
+            </p>
+          </TxAction>
+        </div>
+      ) : null}
     </section>
   );
 }

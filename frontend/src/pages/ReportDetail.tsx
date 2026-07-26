@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useRead } from "../lib/useRead";
-import { getReport } from "../lib/queries";
+import { getBrand, getReport } from "../lib/queries";
 import { Badge, CopyButton, ErrorBox, Skeleton } from "../components/ui";
+import { TxAction } from "../components/TxAction";
+import { useWallet } from "../lib/wallet";
+import { CORE_ADDRESS } from "../config/contracts";
 import {
   formatDateTime,
   shortAddress,
@@ -50,7 +53,13 @@ function DeadlineCountdown({ deadline, appealable }: { deadline: number; appeala
 export default function ReportDetail() {
   const { id } = useParams();
   const reportId = Number(id);
+  const { address: account } = useWallet();
   const report = useRead(() => getReport(reportId), [reportId]);
+  const brandId = report.data ? toNumber(report.data.brand_id) : 0;
+  const brand = useRead(
+    () => (brandId === 0 ? Promise.resolve(null) : getBrand(brandId)),
+    [brandId],
+  );
 
   if (report.error) return <ErrorBox message={report.error} onRetry={report.retry} />;
   if (report.loading || !report.data) return <Skeleton rows={8} />;
@@ -61,6 +70,18 @@ export default function ReportDetail() {
   const statusNum = toNumber(r.status);
   const signals = (r.signals as unknown[]) ?? [];
   const hasVerdict = toNumber(r.verdict) !== 0;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const deadlinePassed = nowSec >= toNumber(r.appeal_deadline);
+  const isHunter =
+    account !== null && String(r.hunter).toLowerCase() === String(account).toLowerCase();
+  const isBrandAdmin =
+    account !== null &&
+    brand.data !== null &&
+    String(brand.data?.admin ?? "").toLowerCase() === String(account).toLowerCase();
+  // appeal() accepts the brand admin against CONFIRMED and the hunter against CLEARED.
+  const canAppeal =
+    (statusNum === 2 && isBrandAdmin) || (statusNum === 4 && isHunter);
+  const appealStake = toBigInt(r.stake) * 2n;
 
   return (
     <>
@@ -146,6 +167,82 @@ export default function ReportDetail() {
               </>
             ) : null}
           </dl>
+        </section>
+
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Actions</h2>
+          {statusNum === 1 || (statusNum === 5 && toNumber(r.retry_count) === 1) ? (
+            <TxAction
+              label="Run adjudication"
+              address={CORE_ADDRESS}
+              functionName="adjudicate"
+              args={[reportId]}
+              onDone={report.retry}
+            >
+              <p className="lead" style={{ margin: 0 }}>
+                Anyone can trigger adjudication. Validators independently render the suspect page
+                and the official brand page, then vote on the verdict. This takes a few minutes.
+              </p>
+            </TxAction>
+          ) : null}
+
+          {statusNum === 6 ? (
+            <TxAction
+              label="Run appeal review"
+              address={CORE_ADDRESS}
+              functionName="adjudicate"
+              args={[reportId]}
+              onDone={report.retry}
+            >
+              <p className="lead" style={{ margin: 0 }}>
+                This report is under appeal. The re-review runs with an adversarial skeptic prompt
+                and produces a final verdict.
+              </p>
+            </TxAction>
+          ) : null}
+
+          {canAppeal && !deadlinePassed ? (
+            <div style={{ marginTop: 16 }}>
+              <TxAction
+                label={`Appeal — stake ${weiToGen(appealStake)}`}
+                address={CORE_ADDRESS}
+                functionName="appeal"
+                args={[reportId]}
+                value={appealStake}
+                onDone={report.retry}
+              >
+                <p className="lead" style={{ margin: 0 }}>
+                  Appealing costs twice the original stake. If the appeal review agrees with you,
+                  you recover it; if not, it goes to the other party.
+                </p>
+              </TxAction>
+            </div>
+          ) : null}
+
+          {AWAITING_SETTLEMENT.has(statusNum) ? (
+            <div style={{ marginTop: 16 }}>
+              <TxAction
+                label="Settle report"
+                address={CORE_ADDRESS}
+                functionName="settle"
+                args={[reportId]}
+                disabled={!deadlinePassed}
+                disabledReason="Window still open"
+                onDone={report.retry}
+              >
+                <p className="lead" style={{ margin: 0 }}>
+                  Settlement is permissionless and moves the funds: bounty to the hunter on a
+                  confirmed report, stake to the brand pool on a cleared one.
+                </p>
+              </TxAction>
+            </div>
+          ) : null}
+
+          {statusNum === 7 || statusNum === 8 || statusNum === 9 ? (
+            <p className="lead" style={{ margin: 0 }}>
+              This report is final. No further actions are available.
+            </p>
+          ) : null}
         </section>
       </div>
     </>
