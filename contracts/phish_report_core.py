@@ -550,6 +550,7 @@ class Contract(gl.Contract):
         outcome = accepted_payload["outcome"]
         now_ts = self._now()
 
+        # Outcome state application (retry, withdrawal refund, verdict persistence)
         if outcome in ("FETCH_FAIL", "BAD_PAYLOAD") or (
             outcome == "OK" and accepted_payload["evidence_sufficient"] is False
         ):
