@@ -75,12 +75,22 @@ class TreeMap(dict):
     def __class_getitem__(cls, item: Any) -> type:
         return cls
 
+    def __setitem__(self, key: Any, value: Any) -> None:
+        if isinstance(value, list) and not isinstance(value, DynArray):
+            converted = DynArray()
+            converted.extend(value)
+            value = converted
+        super().__setitem__(key, value)
+
     def get(self, key: Any, default: Any = None) -> Any:
         return super().get(key, default)
 
 
 class DynArray(list):
     """List-backed DynArray stub for GenLayer testing."""
+
+    def __init__(self) -> None:
+        super().__init__()
 
     def __class_getitem__(cls, item: Any) -> type:
         return cls
