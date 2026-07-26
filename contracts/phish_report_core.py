@@ -405,9 +405,188 @@ class Contract(gl.Contract):
     def adjudicate(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
             raise ValueError("ERR_NOT_FOUND")
-        if self.report_status[report_id] != STATUS_SUBMITTED:
-            raise ValueError("ERR_NOT_SUBMITTED")
-        raise NotImplementedError("ERR_PHASE3")
+
+        st = self.report_status[report_id]
+        ret = self.report_retry[report_id]
+
+        if not (st == STATUS_SUBMITTED or (st == STATUS_UNDETERMINED and ret == 1)):
+            raise ValueError("ERR_NOT_ADJUDICABLE")
+
+        brand_id = self.report_brand[report_id]
+        suspect_url = str(self.report_url[report_id])
+        brand_info = self._registry().get_brand(brand_id)
+        official_domain = str(brand_info["domains"][0])
+        brand_name = str(brand_info["name"])
+        scope_note = str(brand_info["scope_note"])
+
+        def _evaluate_once():
+            try:
+                suspect_text = gl.nondet.web.render(suspect_url, mode="text")  # VERIFY-AT-STUDIO
+            except Exception:
+                return ("FETCH_FAIL_SUSPECT", None)
+
+            try:
+                official_text = gl.nondet.web.render(
+                    "https://" + official_domain, mode="text"
+                )  # VERIFY-AT-STUDIO
+            except Exception:
+                return ("FETCH_FAIL_OFFICIAL", None)
+
+            prompt = build_adjudication_prompt(
+                brand_name, official_domain, scope_note, official_text, suspect_text
+            )
+            raw = gl.nondet.exec_prompt(prompt)  # VERIFY-AT-STUDIO
+
+            try:
+                parsed = parse_verdict_payload(raw)
+            except ValueError:
+                return ("BAD_PAYLOAD", None)
+
+            return ("OK", parsed)
+
+        def leader_fn() -> str:
+            tag, parsed = _evaluate_once()
+            if tag.startswith("FETCH_FAIL"):
+                target = "suspect" if tag == "FETCH_FAIL_SUSPECT" else "official"
+                return json.dumps({"outcome": "FETCH_FAIL", "target": target}, sort_keys=True)
+            elif tag == "BAD_PAYLOAD":
+                return json.dumps({"outcome": "BAD_PAYLOAD"}, sort_keys=True)
+            else:
+                payload = {"outcome": "OK"}
+                payload.update(parsed)
+                return json.dumps(payload, sort_keys=True)
+
+        def validator_fn(leader_payload_str: str) -> bool:
+            try:
+                leader_payload = json.loads(leader_payload_str)
+                if not isinstance(leader_payload, dict) or "outcome" not in leader_payload:
+                    return False
+            except Exception:
+                return False
+
+            own_tag, own_parsed = _evaluate_once()
+
+            l_outcome = leader_payload.get("outcome")
+            if l_outcome == "FETCH_FAIL":
+                l_target = leader_payload.get("target")
+                expected_tag = (
+                    "FETCH_FAIL_SUSPECT" if l_target == "suspect" else "FETCH_FAIL_OFFICIAL"
+                )
+                return own_tag == expected_tag
+
+            elif l_outcome == "BAD_PAYLOAD":
+                return own_tag == "BAD_PAYLOAD"
+
+            elif l_outcome == "OK":
+                try:
+                    l_verdict = leader_payload["verdict"]
+                    l_confidence = leader_payload["confidence"]
+                    l_signals = leader_payload["signals"]
+                    l_ev = leader_payload["evidence_sufficient"]
+                    l_reason = leader_payload["reason"]
+
+                    if l_verdict not in (
+                        VERDICT_CONFIRMED_PHISHING,
+                        VERDICT_SUSPICIOUS,
+                        VERDICT_CLEARED,
+                    ):
+                        return False
+                    if (
+                        isinstance(l_confidence, bool)
+                        or not isinstance(l_confidence, int)
+                        or not (0 <= l_confidence <= 100)
+                    ):
+                        return False
+                    if not isinstance(l_signals, list) or not (1 <= len(l_signals) <= 8):
+                        return False
+                    if any(
+                        isinstance(x, bool) or not isinstance(x, int) or not (1 <= x <= 8)
+                        for x in l_signals
+                    ):
+                        return False
+                    if len(set(l_signals)) != len(l_signals):
+                        return False
+                    if SIGNAL_NONE_OBSERVED in l_signals and len(l_signals) > 1:
+                        return False
+                    if (
+                        not isinstance(l_ev, bool)
+                        or not isinstance(l_reason, str)
+                        or len(l_reason) > MAX_REASON_LEN
+                    ):
+                        return False
+
+                    if l_verdict == VERDICT_CONFIRMED_PHISHING:
+                        if (
+                            l_confidence < 70
+                            or len(l_signals) < 2
+                            or SIGNAL_NONE_OBSERVED in l_signals
+                        ):
+                            return False
+                    elif l_verdict == VERDICT_CLEARED:
+                        if not (l_signals == [SIGNAL_NONE_OBSERVED] or l_confidence <= 30):
+                            return False
+                except Exception:
+                    return False
+
+                if own_tag != "OK":
+                    return False
+
+                if l_verdict != own_parsed["verdict"]:
+                    return False
+
+                if abs(l_confidence - own_parsed["confidence"]) > CONFIDENCE_TOLERANCE:
+                    return False
+
+                if l_ev != own_parsed["evidence_sufficient"]:
+                    return False
+
+                return True
+
+            return False
+
+        accepted_payload_str = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)  # VERIFY-AT-STUDIO
+        accepted_payload = json.loads(accepted_payload_str)
+
+        outcome = accepted_payload["outcome"]
+        now_ts = self._now()
+
+        if outcome in ("FETCH_FAIL", "BAD_PAYLOAD") or (
+            outcome == "OK" and accepted_payload["evidence_sufficient"] is False
+        ):
+            if ret == 0:
+                self.report_status[report_id] = STATUS_UNDETERMINED
+                self.report_retry[report_id] = 1
+                self.report_reason[report_id] = "UNDETERMINED:" + outcome
+                self.report_adjudicated_at[report_id] = now_ts
+            elif ret == 1:
+                self.report_status[report_id] = STATUS_WITHDRAWN
+                self.report_adjudicated_at[report_id] = now_ts
+                self.report_reason[report_id] = "WITHDRAWN:" + outcome
+                hunter_addr = self.report_hunter[report_id]
+                stake_amt = self.report_stake[report_id]
+                self._transfer(hunter_addr, stake_amt)  # VERIFY-AT-STUDIO
+                bounty_amt = self.report_bounty[report_id]
+                self.pool_reserved[brand_id] -= bounty_amt
+                dom = self.report_domain[report_id]
+                if self.pending_domain.get(dom, 0) == report_id:
+                    self.pending_domain[dom] = 0
+                self.hunter_open_count[hunter_addr] -= 1
+
+        elif outcome == "OK" and accepted_payload["evidence_sufficient"] is True:
+            v_int = accepted_payload["verdict"]
+            self.report_verdict[report_id] = v_int
+            self.report_confidence[report_id] = accepted_payload["confidence"]
+            self.report_signals[report_id] = DynArray(accepted_payload["signals"])
+            self.report_reason[report_id] = accepted_payload["reason"]
+            self.report_adjudicated_at[report_id] = now_ts
+            self.report_appeal_deadline[report_id] = now_ts + APPEAL_WINDOW
+
+            if v_int == VERDICT_CONFIRMED_PHISHING:
+                self.report_status[report_id] = STATUS_CONFIRMED
+            elif v_int == VERDICT_SUSPICIOUS:
+                self.report_status[report_id] = STATUS_SUSPICIOUS
+            elif v_int == VERDICT_CLEARED:
+                self.report_status[report_id] = STATUS_CLEARED
 
     @gl.public.view
     def get_report(self, report_id: u256) -> dict:
