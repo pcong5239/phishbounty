@@ -7,10 +7,12 @@ import json  # VERIFY-AT-STUDIO
 import time
 from genlayer import *
 
-MIN_STAKE_ABS = 500_000_000_000_000
-MIN_FIRST_DEPOSIT = 10_000_000_000_000_000
-BOUNTY_MIN = 2_000_000_000_000_000
-BOUNTY_MAX = 50_000_000_000_000_000
+GEN = 10**18  # confirmed by Studionet value probe 2026-07-27: UI converts whole-GEN input to wei
+MIN_STAKE_ABS = 1 * GEN
+MIN_FIRST_DEPOSIT = 5 * GEN
+BOUNTY_MIN = 5 * GEN
+BOUNTY_MAX = 500 * GEN
+BOUNTY_STEP = 5 * GEN
 APPEAL_WINDOW = 600
 REVERIFY_COOLDOWN = 1800
 MAX_OPEN_PER_HUNTER = 5
@@ -570,6 +572,10 @@ class Contract(gl.Contract):
 
         if not (BOUNTY_MIN <= amount <= BOUNTY_MAX):
             raise gl.vm.UserError("ERR_BOUNTY_RANGE")
+        # Stake is bounty // 5 and appeal is 2x stake; both must be
+        # whole-GEN amounts the Studio UI can accept.
+        if amount % BOUNTY_STEP != 0:
+            raise gl.vm.UserError("ERR_BOUNTY_STEP")
 
         self.pool_bounty[brand_id] = amount
 

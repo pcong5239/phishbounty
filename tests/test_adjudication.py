@@ -3,6 +3,7 @@ import pytest
 from genlayer import ConsensusError, Address, gl
 from phish_report_core import (
     BOUNTY_MIN,
+    GEN,
     MIN_FIRST_DEPOSIT,
     OFFICIAL_EXCERPT_LIMIT,
     RENDER_MODE,
@@ -197,7 +198,7 @@ def _setup_report(system):
     system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT * 10)
     system.core.fund_pool(brand_id)
     system.set_caller(system.admin)
-    bounty = 10_000_000_000_000_000
+    bounty = 10 * GEN
     system.core.set_bounty(brand_id, bounty)
     stake = system.core.get_required_stake(brand_id)
 

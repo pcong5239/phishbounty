@@ -4,6 +4,7 @@ import pytest
 from genlayer import ConsensusError, gl
 from phish_report_core import (
     APPEAL_WINDOW,
+    GEN,
     MIN_FIRST_DEPOSIT,
     REVERIFY_COOLDOWN,
     build_reverify_prompt,
@@ -11,7 +12,7 @@ from phish_report_core import (
 )
 
 
-BOUNTY = 10_000_000_000_000_000
+BOUNTY = 10 * GEN
 INITIAL_POOL = MIN_FIRST_DEPOSIT * 20
 URL = "https://phish-acme.com/login"
 DOMAIN = "phish-acme.com"

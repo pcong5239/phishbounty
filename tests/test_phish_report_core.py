@@ -3,6 +3,7 @@ from genlayer import Address, gl
 from phish_report_core import (
     BOUNTY_MAX,
     BOUNTY_MIN,
+    GEN,
     MIN_FIRST_DEPOSIT,
     MIN_STAKE_ABS,
 )
@@ -13,7 +14,7 @@ def test_payable_enforcement(system):
     brand_id = system.registry.register_brand("Brand Acme", "acme.com", "Scope")
 
     # Non-payable method set_bounty called with value > 0 raises ERR_NON_PAYABLE
-    system.set_caller(system.admin, value=100)
+    system.set_caller(system.admin, value=GEN)
     with pytest.raises(ValueError, match="ERR_NON_PAYABLE"):
         system.core.set_bounty(brand_id, BOUNTY_MIN)
 
@@ -51,7 +52,7 @@ def test_fund_pool(system):
         system.core.fund_pool(brand_id)
 
     # First deposit below min rejected
-    system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT - 1)
+    system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT - GEN)
     with pytest.raises(ValueError, match="ERR_MIN_DEPOSIT"):
         system.core.fund_pool(brand_id)
 
@@ -61,9 +62,9 @@ def test_fund_pool(system):
     assert system.core.get_pool(brand_id)["balance"] == MIN_FIRST_DEPOSIT
 
     # Top-up below min allowed after first deposit
-    system.set_caller(system.admin, value=1_000)
+    system.set_caller(system.admin, value=GEN)
     system.core.fund_pool(brand_id)
-    assert system.core.get_pool(brand_id)["balance"] == MIN_FIRST_DEPOSIT + 1_000
+    assert system.core.get_pool(brand_id)["balance"] == MIN_FIRST_DEPOSIT + GEN
 
 
 def test_brand_inactive_or_unknown(system):
@@ -114,11 +115,11 @@ def test_get_required_stake(system):
     with pytest.raises(ValueError, match="ERR_NO_BOUNTY"):
         system.core.get_required_stake(brand_id)
 
-    # Bounty set to BOUNTY_MIN (0.002 GEN) -> bounty // 5 = 0.0004 GEN < MIN_STAKE_ABS (0.0005 GEN) -> floor at MIN_STAKE_ABS
+    # BOUNTY_MIN is 5 GEN, so bounty // 5 equals the 1 GEN stake floor.
     system.core.set_bounty(brand_id, BOUNTY_MIN)
     assert system.core.get_required_stake(brand_id) == MIN_STAKE_ABS
 
-    # Larger bounty -> BOUNTY_MAX (0.05 GEN) -> bounty // 5 = 0.01 GEN > MIN_STAKE_ABS
+    # BOUNTY_MAX is 500 GEN, so bounty // 5 is 100 GEN.
     system.core.set_bounty(brand_id, BOUNTY_MAX)
     assert system.core.get_required_stake(brand_id) == BOUNTY_MAX // 5
 
@@ -131,7 +132,7 @@ def test_submit_report_happy_path_and_views(system):
     system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT)
     system.core.fund_pool(brand_id)
     system.set_caller(system.admin)
-    bounty = 10_000_000_000_000_000  # 0.01 GEN
+    bounty = BOUNTY_MIN
     system.core.set_bounty(brand_id, bounty)
     stake = system.core.get_required_stake(brand_id)
 
@@ -168,7 +169,7 @@ def test_submit_report_guard_chain(system):
     system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT)
     system.core.fund_pool(brand_id)
     system.set_caller(system.admin)
-    bounty = 10_000_000_000_000_000
+    bounty = BOUNTY_MIN
     system.core.set_bounty(brand_id, bounty)
     stake = system.core.get_required_stake(brand_id)
 
@@ -211,8 +212,8 @@ def test_submit_report_guard_chain(system):
         system.core.submit_report(b2, "https://phish-brand2.com")
 
     # 9. Pool insufficient (balance ok, but reserved makes it insufficient)
-    # Pool balance = MIN_FIRST_DEPOSIT (0.01 GEN), bounty = 0.01 GEN.
-    # First report reserves 0.01 GEN, remaining unreserved = 0.
+    # Pool balance and bounty are both 5 GEN.
+    # First report reserves 5 GEN, leaving no unreserved balance.
     system.set_caller(system.hunter, value=stake)
     system.core.submit_report(brand_id, "https://phish1-acme.com")
 
