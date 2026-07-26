@@ -350,14 +350,14 @@ class Contract(gl.Contract):
 
     def _blocklist_state(self, domain: str) -> int:
         blocklist = gl.get_contract_at(self.blocklist_addr)  # VERIFY-AT-STUDIO
-        return blocklist.get_domain_state(domain)  # VERIFY-AT-STUDIO
+        return blocklist.view().get_domain_state(domain)  # VERIFY-AT-STUDIO
 
     def _transfer(self, to: Address, amount: u256) -> None:
         gl.transfer(to, amount)  # VERIFY-AT-STUDIO
 
     def _blocklist_last_event_at(self, domain: str) -> int:
         blocklist = gl.get_contract_at(self.blocklist_addr)  # VERIFY-AT-STUDIO
-        return blocklist.get_last_event_at(domain)  # VERIFY-AT-STUDIO
+        return blocklist.view().get_last_event_at(domain)  # VERIFY-AT-STUDIO
 
     def _blocklist_append(
         self, domain: str, kind: int, report_id: int, hunter: Address
@@ -485,7 +485,7 @@ class Contract(gl.Contract):
 
     @gl.public.write.payable  # VERIFY-AT-STUDIO
     def fund_pool(self, brand_id: u256) -> None:
-        brand_info = self._registry().get_brand(brand_id)
+        brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if not brand_info["active"]:
             raise ValueError("ERR_BRAND_INACTIVE")
 
@@ -501,7 +501,7 @@ class Contract(gl.Contract):
 
     @gl.public.write
     def set_bounty(self, brand_id: u256, amount: u256) -> None:
-        brand_info = self._registry().get_brand(brand_id)
+        brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if self._sender() != Address(brand_info["admin"]):
             raise ValueError("ERR_NOT_ADMIN")
 
@@ -552,10 +552,10 @@ class Contract(gl.Contract):
         norm_domain = _normalize_domain(host)
 
         # Guard 3: Registry checks
-        if self._registry().is_official_domain(norm_domain):
+        if self._registry().view().is_official_domain(norm_domain):  # VERIFY-AT-STUDIO
             raise ValueError("ERR_OFFICIAL_DOMAIN")
 
-        brand_info = self._registry().get_brand(brand_id)
+        brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if not brand_info["active"]:
             raise ValueError("ERR_BRAND_INACTIVE")
 
@@ -632,7 +632,7 @@ class Contract(gl.Contract):
         caller = self._sender()
         if status == STATUS_CONFIRMED:
             brand_id = self.report_brand[report_id]
-            brand_info = self._registry().get_brand(brand_id)
+            brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
             if caller != Address(brand_info["admin"]):
                 raise ValueError("ERR_NOT_PARTY")
         elif caller != self.report_hunter[report_id]:
@@ -664,7 +664,7 @@ class Contract(gl.Contract):
 
         brand_id = self.report_brand[report_id]
         suspect_url = str(self.report_url[report_id])
-        brand_info = self._registry().get_brand(brand_id)
+        brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         brand_admin = Address(brand_info["admin"])
         official_domain = str(brand_info["domains"][0])
         brand_name = str(brand_info["name"])
@@ -913,7 +913,7 @@ class Contract(gl.Contract):
 
         suspect_url = str(self.report_url[report_id])
         brand_id = self.report_brand[report_id]
-        brand_info = self._registry().get_brand(brand_id)
+        brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         brand_name = str(brand_info["name"])
         official_domain = str(brand_info["domains"][0])
 

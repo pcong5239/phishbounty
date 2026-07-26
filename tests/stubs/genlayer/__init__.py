@@ -128,10 +128,12 @@ class _ContractProxy:
         self._target = target
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._target, name)
+        raise AttributeError(
+            f"Cross-contract method '{name}' requires .view() or .emit()"
+        )
 
-    def view(self) -> _ContractProxy:
-        return self
+    def view(self) -> _ViewProxy:
+        return _ViewProxy(self._target)
 
     def emit(self, value: int = 0, on: str = "finalized") -> _WriteProxy:
         if on not in ("accepted", "finalized"):
@@ -143,6 +145,19 @@ class _ContractProxy:
         )
 
 
+class _ViewProxy:
+    def __init__(self, target: Any) -> None:
+        self._target = target
+
+    def __getattr__(self, name: str) -> Any:
+        declared = getattr(type(self._target), name, None)
+        if not callable(declared) or not hasattr(declared, "__is_view__"):
+            raise AttributeError(
+                f"Cross-contract view cannot call non-view method '{name}'"
+            )
+        return getattr(self._target, name)
+
+
 class _WriteProxy:
     def __init__(self, target: Any, sender: Address, value: int) -> None:
         self._target = target
@@ -150,6 +165,11 @@ class _WriteProxy:
         self._value = value
 
     def __getattr__(self, name: str) -> Any:
+        declared = getattr(type(self._target), name, None)
+        if not callable(declared) or not hasattr(declared, "__is_write__"):
+            raise AttributeError(
+                f"Cross-contract emit cannot call non-write method '{name}'"
+            )
         attr = getattr(self._target, name)
 
         def invoke(*args: Any, **kwargs: Any) -> Any:
