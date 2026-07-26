@@ -65,6 +65,11 @@ class _Message:
         return self.sender_address
 
 
+class _Block:
+    def __init__(self) -> None:
+        self.timestamp = 1_000_000
+
+
 class _Public:
     @staticmethod
     def view(func: Any) -> Any:
@@ -98,6 +103,24 @@ class _GL:
         self.Contract = Contract
         self.public = _Public()
         self.message = _Message()
+        self.block = _Block()
+        self.contracts: dict[Address, Any] = {}
+
+    def get_contract_at(self, addr: Address | str) -> Any:
+        a = Address(addr)
+        if a not in self.contracts:
+            raise KeyError(f"No contract registered at address {a}")
+        return self.contracts[a]
+
+    def register_contract(self, addr: Address | str, instance: Any) -> None:
+        a = Address(addr)
+        self.contracts[a] = instance
+
+    def set_time(self, ts: int) -> None:
+        self.block.timestamp = ts
+
+    def advance_time(self, seconds: int) -> None:
+        self.block.timestamp += seconds
 
 
 gl = _GL()
