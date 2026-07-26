@@ -1,12 +1,21 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useRead } from "../lib/useRead";
 import { getBrand, getPool } from "../lib/queries";
 import { Badge, ErrorBox, Skeleton } from "../components/ui";
+import { TxAction } from "../components/TxAction";
+import { useWallet } from "../lib/wallet";
+import { CORE_ADDRESS } from "../config/contracts";
 import { shortAddress, toBigInt, weiToGen } from "../lib/format";
+
+const GEN = 10n ** 18n;
 
 export default function BrandDetail() {
   const { id } = useParams();
   const brandId = Number(id);
+  const { address: account } = useWallet();
+  const [fundAmount, setFundAmount] = useState("5");
+  const [bountyAmount, setBountyAmount] = useState("5");
 
   const brand = useRead(() => getBrand(brandId), [brandId]);
   const pool = useRead(() => getPool(brandId), [brandId]);
@@ -15,6 +24,8 @@ export default function BrandDetail() {
   if (brand.loading || !brand.data) return <Skeleton rows={6} />;
 
   const b = brand.data;
+  const isAdmin =
+    account !== null && String(b.admin).toLowerCase() === String(account).toLowerCase();
 
   return (
     <>
@@ -77,6 +88,68 @@ export default function BrandDetail() {
             </p>
           ) : null}
         </section>
+
+        {isAdmin ? (
+          <section className="card">
+            <h2 style={{ marginTop: 0 }}>Brand admin</h2>
+            <p className="lead">
+              Amounts are whole GEN. First deposit must be at least 5 GEN; bounties run 5–500 GEN
+              in steps of 5 so hunter stakes stay whole.
+            </p>
+
+            <div className="formrow">
+              <div>
+                <label htmlFor="fund-amount">Add to pool (GEN)</label>
+                <input
+                  id="fund-amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value.replace(/[^\d]/g, ""))}
+                  style={{ minWidth: 120 }}
+                />
+              </div>
+            </div>
+            <TxAction
+              label={`Fund ${fundAmount || "0"} GEN`}
+              address={CORE_ADDRESS}
+              functionName="fund_pool"
+              args={[brandId]}
+              value={BigInt(fundAmount || "0") * GEN}
+              disabled={!fundAmount || BigInt(fundAmount || "0") === 0n}
+              disabledReason="Enter a whole GEN amount"
+              onDone={pool.retry}
+            />
+
+            <div className="formrow" style={{ marginTop: 24 }}>
+              <div>
+                <label htmlFor="bounty-amount">Bounty per confirmed report (GEN)</label>
+                <input
+                  id="bounty-amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={bountyAmount}
+                  onChange={(e) => setBountyAmount(e.target.value.replace(/[^\d]/g, ""))}
+                  style={{ minWidth: 120 }}
+                />
+              </div>
+            </div>
+            <TxAction
+              label={`Set bounty to ${bountyAmount || "0"} GEN`}
+              address={CORE_ADDRESS}
+              functionName="set_bounty"
+              args={[brandId, (BigInt(bountyAmount || "0") * GEN).toString()]}
+              disabled={
+                !bountyAmount ||
+                BigInt(bountyAmount || "0") % 5n !== 0n ||
+                BigInt(bountyAmount || "0") < 5n ||
+                BigInt(bountyAmount || "0") > 500n
+              }
+              disabledReason="Must be 5–500 GEN, multiple of 5"
+              onDone={pool.retry}
+            />
+          </section>
+        ) : null}
       </div>
     </>
   );
