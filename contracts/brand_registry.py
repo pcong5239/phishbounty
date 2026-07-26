@@ -96,7 +96,7 @@ class Contract(gl.Contract):
 
         self.brand_name[brand_id] = s_name
         self.brand_admin[brand_id] = gl.message.sender_address  # VERIFY-AT-STUDIO
-        self.brand_domains[brand_id] = DynArray(norm_domains)
+        self.brand_domains[brand_id] = norm_domains  # VERIFY-AT-STUDIO
         self.brand_scope[brand_id] = scope_note
         self.brand_active[brand_id] = True
         # TODO: Wire block timestamp in Phase 3 when gl.message context is finalized

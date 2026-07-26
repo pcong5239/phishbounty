@@ -455,7 +455,7 @@ class Contract(gl.Contract):
     def _store_accepted_verdict(self, report_id: u256, payload: dict) -> None:
         self.report_verdict[report_id] = payload["verdict"]
         self.report_confidence[report_id] = payload["confidence"]
-        self.report_signals[report_id] = DynArray(payload["signals"])
+        self.report_signals[report_id] = payload["signals"]  # VERIFY-AT-STUDIO
         self.report_reason[report_id] = payload["reason"]
 
     def _finalize_confirmed(self, report_id: u256, hunter_bonus: u256 = 0) -> None:
@@ -665,7 +665,7 @@ class Contract(gl.Contract):
         self.report_status[rid] = STATUS_SUBMITTED
         self.report_verdict[rid] = VERDICT_NONE
         self.report_confidence[rid] = 0
-        self.report_signals[rid] = DynArray()
+        self.report_signals[rid] = []  # VERIFY-AT-STUDIO
         self.report_reason[rid] = ""
         self.report_submitted_at[rid] = self._now()
         self.report_adjudicated_at[rid] = 0

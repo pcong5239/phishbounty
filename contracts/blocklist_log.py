@@ -143,7 +143,7 @@ class Contract(gl.Contract):
         self.event_at[eid] = _now()
 
         if domain not in self.domain_event_ids:
-            self.domain_event_ids[domain] = DynArray()
+            self.domain_event_ids[domain] = []  # VERIFY-AT-STUDIO
         self.domain_event_ids[domain].append(eid)
 
         if kind in (1, 3):
