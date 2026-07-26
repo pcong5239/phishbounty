@@ -66,6 +66,7 @@ u256 = int
 class _Message:
     def __init__(self) -> None:
         self.sender_address = Address("0x0000000000000000000000000000000000000000")
+        self.contract_address = Address("0x0000000000000000000000000000000000000000")
         self.value = 0
 
     @property
@@ -105,6 +106,7 @@ class Contract:
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         instance = super().__new__(cls)
+        instance.address = Address("0x0000000000000000000000000000000000000000")
         for base in reversed(cls.__mro__):
             if hasattr(base, "__annotations__"):
                 for name, type_hint in base.__annotations__.items():
@@ -121,9 +123,57 @@ class Contract:
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 if not getattr(attr, "__is_payable__", False) and gl.message.value > 0:
                     raise ValueError("ERR_NON_PAYABLE")
-                return attr(*args, **kwargs)
+                previous_contract = gl.message.contract_address
+                gl.message.contract_address = self.address
+                try:
+                    return attr(*args, **kwargs)
+                finally:
+                    gl.message.contract_address = previous_contract
             return wrapper
         return attr
+
+
+class _ContractProxy:
+    def __init__(self, target: Any) -> None:
+        self._target = target
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._target, name)
+
+    def view(self) -> _ContractProxy:
+        return self
+
+    def emit(self, value: int = 0, on: str = "finalized") -> _WriteProxy:
+        if on not in ("accepted", "finalized"):
+            raise ValueError("ERR_EMIT_TIMING")
+        return _WriteProxy(
+            self._target,
+            gl.message.contract_address,
+            value,
+        )
+
+
+class _WriteProxy:
+    def __init__(self, target: Any, sender: Address, value: int) -> None:
+        self._target = target
+        self._sender = Address(sender)
+        self._value = value
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._target, name)
+
+        def invoke(*args: Any, **kwargs: Any) -> Any:
+            previous_sender = gl.message.sender_address
+            previous_value = gl.message.value
+            try:
+                gl.message.sender_address = self._sender
+                gl.message.value = self._value
+                return attr(*args, **kwargs)
+            finally:
+                gl.message.sender_address = previous_sender
+                gl.message.value = previous_value
+
+        return invoke
 
 
 class _NondetWeb:
@@ -171,10 +221,11 @@ class _GL:
         a = Address(addr)
         if a not in self.contracts:
             raise KeyError(f"No contract registered at address {a}")
-        return self.contracts[a]
+        return _ContractProxy(self.contracts[a])
 
     def register_contract(self, addr: Address | str, instance: Any) -> None:
         a = Address(addr)
+        instance.address = a
         self.contracts[a] = instance
 
     def set_time(self, ts: int) -> None:

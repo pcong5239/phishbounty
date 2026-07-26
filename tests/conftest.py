@@ -55,7 +55,7 @@ def system():
 
     # Set writer of blocklist to core
     gl.message.sender_address = deployer
-    blk.set_writer(core_addr)
+    blk.set_writer(core.address)
 
     class SystemEnv:
         def __init__(self):

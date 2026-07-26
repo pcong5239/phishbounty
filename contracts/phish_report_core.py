@@ -134,6 +134,30 @@ def build_adjudication_prompt(
     )
 
 
+def build_skeptic_prompt(
+    brand_name: str,
+    official_domain: str,
+    scope_note: str,
+    official_excerpt: str,
+    suspect_excerpt: str,
+) -> str:
+    """Build the single appeal pass prompt with an adversarial role frame."""
+    base_prompt = build_adjudication_prompt(
+        brand_name,
+        official_domain,
+        scope_note,
+        official_excerpt,
+        suspect_excerpt,
+    )
+    return (
+        "ADVERSARIAL-SKEPTIC-PASS\n"
+        "A prior review reached a verdict that has been formally challenged. "
+        "Act as an adversarial skeptic: first try to argue the challenged verdict is WRONG, "
+        "then decide on the evidence alone.\n\n"
+        + base_prompt
+    )
+
+
 def parse_verdict_payload(raw: str) -> dict:
     """Parse raw LLM response JSON and validate coherence rules."""
     if not isinstance(raw, str):
@@ -266,6 +290,130 @@ class Contract(gl.Contract):
 
     def _transfer(self, to: Address, amount: u256) -> None:
         gl.transfer(to, amount)  # VERIFY-AT-STUDIO
+
+    def _blocklist_append(
+        self, domain: str, kind: int, report_id: int, hunter: Address
+    ) -> None:
+        blocklist = gl.get_contract_at(self.blocklist_addr)  # VERIFY-AT-STUDIO
+        blocklist.emit(on="finalized").append_event(  # VERIFY-AT-STUDIO
+            domain, kind, report_id, hunter
+        )
+
+    def _clear_pending_and_open(self, report_id: u256) -> None:
+        domain = self.report_domain[report_id]
+        hunter = self.report_hunter[report_id]
+        if self.pending_domain.get(domain, 0) == report_id:
+            self.pending_domain[domain] = 0
+        self.hunter_open_count[hunter] -= 1
+
+    def _append_confirmed_blocklist_event(self, report_id: u256) -> None:
+        domain = self.report_domain[report_id]
+        state = self._blocklist_state(domain)
+        if state == 0:
+            kind = 1
+        elif state == 2:
+            kind = 3
+        else:
+            # State 1 means the domain is already listed. Skip instead of reverting
+            # so financial settlement cannot be blocked by an inconsistent log.
+            return
+        self._blocklist_append(
+            domain, kind, report_id, self.report_hunter[report_id]
+        )
+
+    def _store_accepted_verdict(self, report_id: u256, payload: dict) -> None:
+        self.report_verdict[report_id] = payload["verdict"]
+        self.report_confidence[report_id] = payload["confidence"]
+        self.report_signals[report_id] = DynArray(payload["signals"])
+        self.report_reason[report_id] = payload["reason"]
+
+    def _finalize_confirmed(self, report_id: u256, hunter_bonus: u256 = 0) -> None:
+        brand_id = self.report_brand[report_id]
+        hunter = self.report_hunter[report_id]
+        bounty = self.report_bounty[report_id]
+        stake = self.report_stake[report_id]
+
+        self._transfer(hunter, bounty + stake + hunter_bonus)  # VERIFY-AT-STUDIO
+        self.pool_balance[brand_id] -= bounty
+        self.pool_reserved[brand_id] -= bounty
+        self._append_confirmed_blocklist_event(report_id)
+        self.confirmed_domain[self.report_domain[report_id]] = report_id
+        self._clear_pending_and_open(report_id)
+        self.hunter_confirmed_count[hunter] = (
+            self.hunter_confirmed_count.get(hunter, 0) + 1
+        )
+        self.report_status[report_id] = STATUS_FINAL_CONFIRMED
+
+    def _apply_appeal_outcome(
+        self,
+        report_id: u256,
+        accepted_payload: dict,
+        brand_admin: Address,
+        now_ts: u64,
+    ) -> None:
+        brand_id = self.report_brand[report_id]
+        hunter = self.report_hunter[report_id]
+        appellant = self.report_appellant[report_id]
+        appeal_stake = self.report_appeal_stake[report_id]
+        stake = self.report_stake[report_id]
+        bounty = self.report_bounty[report_id]
+        original_confirmed = appellant == brand_admin
+        outcome = accepted_payload["outcome"]
+
+        inconclusive = outcome in ("FETCH_FAIL", "BAD_PAYLOAD") or (
+            outcome == "OK" and accepted_payload["evidence_sufficient"] is False
+        )
+        if inconclusive:
+            reason_tag = (
+                "INSUFFICIENT"
+                if outcome == "OK"
+                else outcome
+            )
+            self.report_reason[report_id] = "APPEAL_INCONCLUSIVE:" + reason_tag
+            self.report_adjudicated_at[report_id] = now_ts
+            self._transfer(appellant, appeal_stake)  # VERIFY-AT-STUDIO
+
+            if original_confirmed:
+                self._finalize_confirmed(report_id)
+            else:
+                self.pool_balance[brand_id] += stake
+                self.pool_reserved[brand_id] -= bounty
+                self._clear_pending_and_open(report_id)
+                self.hunter_cleared_count[hunter] = (
+                    self.hunter_cleared_count.get(hunter, 0) + 1
+                )
+                self.report_status[report_id] = STATUS_FINAL_CLEARED
+            return
+
+        self._store_accepted_verdict(report_id, accepted_payload)
+        self.report_adjudicated_at[report_id] = now_ts
+        verdict = accepted_payload["verdict"]
+
+        if verdict == VERDICT_CONFIRMED_PHISHING:
+            # The appeal stake is either returned to the winning hunter appellant
+            # or forfeited by the losing brand appellant to the hunter.
+            self._finalize_confirmed(report_id, appeal_stake)
+        elif verdict == VERDICT_CLEARED:
+            self.pool_balance[brand_id] += stake
+            if appellant == hunter:
+                self.pool_balance[brand_id] += appeal_stake
+            else:
+                self._transfer(appellant, appeal_stake)  # VERIFY-AT-STUDIO
+            self.pool_reserved[brand_id] -= bounty
+            self._clear_pending_and_open(report_id)
+            self.hunter_cleared_count[hunter] = (
+                self.hunter_cleared_count.get(hunter, 0) + 1
+            )
+            self.report_status[report_id] = STATUS_FINAL_CLEARED
+        elif verdict == VERDICT_SUSPICIOUS:
+            self._transfer(hunter, stake)  # VERIFY-AT-STUDIO
+            self._transfer(appellant, appeal_stake)  # VERIFY-AT-STUDIO
+            self.pool_reserved[brand_id] -= bounty
+            self._clear_pending_and_open(report_id)
+            self.hunter_suspicious_count[hunter] = (
+                self.hunter_suspicious_count.get(hunter, 0) + 1
+            )
+            self.report_status[report_id] = STATUS_FINAL_CLEARED
 
     @gl.public.write.payable  # VERIFY-AT-STUDIO
     def fund_pool(self, brand_id: u256) -> None:
@@ -438,12 +586,18 @@ class Contract(gl.Contract):
         st = self.report_status[report_id]
         ret = self.report_retry[report_id]
 
-        if not (st == STATUS_SUBMITTED or (st == STATUS_UNDETERMINED and ret == 1)):
+        is_appeal = st == STATUS_APPEALED
+        if not (
+            st == STATUS_SUBMITTED
+            or is_appeal
+            or (st == STATUS_UNDETERMINED and ret == 1)
+        ):
             raise ValueError("ERR_NOT_ADJUDICABLE")
 
         brand_id = self.report_brand[report_id]
         suspect_url = str(self.report_url[report_id])
         brand_info = self._registry().get_brand(brand_id)
+        brand_admin = Address(brand_info["admin"])
         official_domain = str(brand_info["domains"][0])
         brand_name = str(brand_info["name"])
         scope_note = str(brand_info["scope_note"])
@@ -461,9 +615,18 @@ class Contract(gl.Contract):
             except Exception:
                 return ("FETCH_FAIL_OFFICIAL", None)
 
-            prompt = build_adjudication_prompt(
-                brand_name, official_domain, scope_note, official_text, suspect_text
-            )
+            if is_appeal:
+                prompt = build_skeptic_prompt(
+                    brand_name, official_domain, scope_note, official_text, suspect_text
+                )
+            else:
+                prompt = build_adjudication_prompt(
+                    brand_name,
+                    official_domain,
+                    scope_note,
+                    official_text,
+                    suspect_text,
+                )
             raw = gl.nondet.exec_prompt(prompt)  # VERIFY-AT-STUDIO
 
             try:
@@ -579,6 +742,10 @@ class Contract(gl.Contract):
         outcome = accepted_payload["outcome"]
         now_ts = self._now()
 
+        if is_appeal:
+            self._apply_appeal_outcome(report_id, accepted_payload, brand_admin, now_ts)
+            return
+
         # Outcome state application (retry, withdrawal refund, verdict persistence)
         if outcome in ("FETCH_FAIL", "BAD_PAYLOAD") or (
             outcome == "OK" and accepted_payload["evidence_sufficient"] is False
@@ -609,10 +776,7 @@ class Contract(gl.Contract):
 
         elif outcome == "OK" and accepted_payload["evidence_sufficient"] is True:
             v_int = accepted_payload["verdict"]
-            self.report_verdict[report_id] = v_int
-            self.report_confidence[report_id] = accepted_payload["confidence"]
-            self.report_signals[report_id] = DynArray(accepted_payload["signals"])
-            self.report_reason[report_id] = accepted_payload["reason"]
+            self._store_accepted_verdict(report_id, accepted_payload)
             self.report_adjudicated_at[report_id] = now_ts
             self.report_appeal_deadline[report_id] = now_ts + APPEAL_WINDOW
 
