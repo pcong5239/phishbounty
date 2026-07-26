@@ -134,6 +134,84 @@ def build_adjudication_prompt(
     )
 
 
+def parse_verdict_payload(raw: str) -> dict:
+    """Parse raw LLM response JSON and validate coherence rules."""
+    if not isinstance(raw, str):
+        raise ValueError("ERR_PAYLOAD")
+
+    s = raw.strip()
+    if s.startswith("```json"):
+        s = s[7:]
+        if s.endswith("```"):
+            s = s[:-3]
+    elif s.startswith("```"):
+        s = s[3:]
+        if s.endswith("```"):
+            s = s[:-3]
+    s = s.strip()
+
+    if len(s.encode("utf-8")) > MAX_PAYLOAD_BYTES:
+        raise ValueError("ERR_PAYLOAD")
+
+    try:
+        data = json.loads(s)  # VERIFY-AT-STUDIO
+    except Exception:
+        raise ValueError("ERR_PAYLOAD")
+
+    expected_keys = {"verdict", "confidence", "signals", "evidence_sufficient", "reason"}
+    if not isinstance(data, dict) or set(data.keys()) != expected_keys:
+        raise ValueError("ERR_PAYLOAD")
+
+    v_str = data["verdict"]
+    verdict_map = {
+        "CONFIRMED_PHISHING": VERDICT_CONFIRMED_PHISHING,
+        "SUSPICIOUS": VERDICT_SUSPICIOUS,
+        "CLEARED": VERDICT_CLEARED,
+    }
+    if v_str not in verdict_map:
+        raise ValueError("ERR_PAYLOAD")
+    v_int = verdict_map[v_str]
+
+    conf = data["confidence"]
+    if isinstance(conf, bool) or not isinstance(conf, int) or not (0 <= conf <= 100):
+        raise ValueError("ERR_PAYLOAD")
+
+    sigs = data["signals"]
+    if not isinstance(sigs, list) or not (1 <= len(sigs) <= 8):
+        raise ValueError("ERR_PAYLOAD")
+    if any(isinstance(x, bool) or not isinstance(x, int) or not (1 <= x <= 8) for x in sigs):
+        raise ValueError("ERR_PAYLOAD")
+    if len(set(sigs)) != len(sigs):
+        raise ValueError("ERR_PAYLOAD")
+    if SIGNAL_NONE_OBSERVED in sigs and len(sigs) > 1:
+        raise ValueError("ERR_PAYLOAD")
+
+    ev = data["evidence_sufficient"]
+    if not isinstance(ev, bool):
+        raise ValueError("ERR_PAYLOAD")
+
+    reason = data["reason"]
+    if not isinstance(reason, str) or len(reason) > MAX_REASON_LEN:
+        raise ValueError("ERR_PAYLOAD")
+
+    # Coherence rules
+    if v_int == VERDICT_CONFIRMED_PHISHING:
+        if conf < 70 or len(sigs) < 2 or SIGNAL_NONE_OBSERVED in sigs:
+            raise ValueError("ERR_PAYLOAD")
+
+    if v_int == VERDICT_CLEARED:
+        if not (sigs == [SIGNAL_NONE_OBSERVED] or conf <= 30):
+            raise ValueError("ERR_PAYLOAD")
+
+    return {
+        "verdict": v_int,
+        "confidence": conf,
+        "signals": sigs,
+        "evidence_sufficient": ev,
+        "reason": reason,
+    }
+
+
 class Contract(gl.Contract):
     registry_addr: Address
     blocklist_addr: Address
