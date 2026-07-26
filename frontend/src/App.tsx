@@ -6,9 +6,12 @@ import Reports from "./pages/Reports";
 import ReportDetail from "./pages/ReportDetail";
 import Blocklist from "./pages/Blocklist";
 import Hunters from "./pages/Hunters";
+import Hunt from "./pages/Hunt";
+import { WalletBar } from "./components/WalletBar";
 
 const NAV = [
   { to: "/", label: "Overview", end: true },
+  { to: "/hunt", label: "File a report", end: false },
   { to: "/brands", label: "Brands", end: false },
   { to: "/reports", label: "Reports", end: false },
   { to: "/blocklist", label: "Blocklist", end: false },
@@ -32,10 +35,12 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+        <WalletBar />
       </aside>
       <main className="content">
         <Routes>
           <Route path="/" element={<Overview />} />
+          <Route path="/hunt" element={<Hunt />} />
           <Route path="/brands" element={<Brands />} />
           <Route path="/brands/:id" element={<BrandDetail />} />
           <Route path="/reports" element={<Reports />} />
