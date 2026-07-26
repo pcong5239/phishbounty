@@ -274,7 +274,7 @@ def test_port_handling(system):
     assert rep["suspect_domain"] == "evil-example.com"
 
 
-def test_adjudicate_stub(system):
+def test_adjudicate_not_found(system):
     system.set_caller(system.admin)
     brand_id = system.registry.register_brand("Brand Acme", "acme.com", "Scope")
     system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT)
@@ -291,13 +291,8 @@ def test_adjudicate_stub(system):
     with pytest.raises(ValueError, match="ERR_NOT_FOUND"):
         system.core.adjudicate(999)
 
-    # Valid report -> raises NotImplementedError("ERR_PHASE3")
-    system.set_caller(system.hunter, value=0)
-    with pytest.raises(NotImplementedError, match="ERR_PHASE3"):
-        system.core.adjudicate(rid)
-
-    # Non-SUBMITTED status -> ERR_NOT_SUBMITTED
+    # Non-SUBMITTED / non-adjudicable status -> ERR_NOT_ADJUDICABLE
     system.core.report_status[rid] = 2  # CONFIRMED
     system.set_caller(system.hunter, value=0)
-    with pytest.raises(ValueError, match="ERR_NOT_SUBMITTED"):
+    with pytest.raises(ValueError, match="ERR_NOT_ADJUDICABLE"):
         system.core.adjudicate(rid)
