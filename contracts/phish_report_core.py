@@ -16,6 +16,7 @@ REVERIFY_COOLDOWN = 1800
 MAX_OPEN_PER_HUNTER = 5
 MAX_URL_LEN = 300
 
+RENDER_MODE = "text"  # VERIFY-AT-STUDIO
 SUSPECT_EXCERPT_LIMIT = 6000
 OFFICIAL_EXCERPT_LIMIT = 3000
 MAX_PAYLOAD_BYTES = 2000
@@ -697,13 +698,15 @@ class Contract(gl.Contract):
 
         def _evaluate_once():
             try:
-                suspect_text = gl.nondet.web.render(suspect_url, mode="text")  # VERIFY-AT-STUDIO
+                suspect_text = gl.nondet.web.render(  # VERIFY-AT-STUDIO
+                    suspect_url, mode=RENDER_MODE
+                )
             except Exception:
                 return ("FETCH_FAIL_SUSPECT", None)
 
             try:
                 official_text = gl.nondet.web.render(
-                    "https://" + official_domain, mode="text"
+                    "https://" + official_domain, mode=RENDER_MODE
                 )  # VERIFY-AT-STUDIO
             except Exception:
                 return ("FETCH_FAIL_OFFICIAL", None)
@@ -947,7 +950,7 @@ class Contract(gl.Contract):
         def _evaluate_once():
             try:
                 suspect_text = gl.nondet.web.render(  # VERIFY-AT-STUDIO
-                    suspect_url, mode="text"
+                    suspect_url, mode=RENDER_MODE
                 )
             except Exception:
                 return ("DOWN", None)
