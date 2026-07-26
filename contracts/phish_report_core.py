@@ -787,6 +787,44 @@ class Contract(gl.Contract):
             elif v_int == VERDICT_CLEARED:
                 self.report_status[report_id] = STATUS_CLEARED
 
+    @gl.public.write
+    def settle(self, report_id: u256) -> None:
+        if report_id not in self.report_brand:
+            raise ValueError("ERR_NOT_FOUND")
+
+        status = self.report_status[report_id]
+        if status not in (STATUS_CONFIRMED, STATUS_SUSPICIOUS, STATUS_CLEARED):
+            raise ValueError("ERR_NOT_SETTLEABLE")
+
+        if self._now() < self.report_appeal_deadline[report_id]:
+            raise ValueError("ERR_WINDOW_OPEN")
+
+        if status == STATUS_CONFIRMED:
+            self._finalize_confirmed(report_id)
+            return
+
+        brand_id = self.report_brand[report_id]
+        hunter = self.report_hunter[report_id]
+        bounty = self.report_bounty[report_id]
+        stake = self.report_stake[report_id]
+
+        if status == STATUS_SUSPICIOUS:
+            self._transfer(hunter, stake)  # VERIFY-AT-STUDIO
+            self.pool_reserved[brand_id] -= bounty
+            self._clear_pending_and_open(report_id)
+            self.hunter_suspicious_count[hunter] = (
+                self.hunter_suspicious_count.get(hunter, 0) + 1
+            )
+            self.report_status[report_id] = STATUS_FINAL_CLEARED
+        elif status == STATUS_CLEARED:
+            self.pool_balance[brand_id] += stake
+            self.pool_reserved[brand_id] -= bounty
+            self._clear_pending_and_open(report_id)
+            self.hunter_cleared_count[hunter] = (
+                self.hunter_cleared_count.get(hunter, 0) + 1
+            )
+            self.report_status[report_id] = STATUS_FINAL_CLEARED
+
     @gl.public.view
     def get_report(self, report_id: u256) -> dict:
         if report_id not in self.report_brand:
