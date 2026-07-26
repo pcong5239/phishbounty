@@ -1,12 +1,14 @@
 """Minimal GenLayer runtime stub package for unit testing."""
 
+from __future__ import annotations
+
 from typing import Any
 
 
 class Address:
     """Wraps a hex string, equality by normalized value."""
 
-    def __init__(self, value: str | "Address"):
+    def __init__(self, value: str | Address):
         if isinstance(value, Address):
             self.value = value.value
         elif isinstance(value, str):
