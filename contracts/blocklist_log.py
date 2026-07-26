@@ -7,6 +7,27 @@ import time
 from genlayer import *
 
 
+def _coerce_address(value) -> Address:
+    """Studio UI may serialize address inputs as hex str, int, or bytes."""
+    if isinstance(value, Address):
+        return value
+    if isinstance(value, str):
+        try:
+            return Address(value.strip())
+        except Exception:
+            raise gl.vm.UserError("ERR_ADDRESS")
+    if isinstance(value, int):
+        if value < 0 or value >= (1 << 160):
+            raise gl.vm.UserError("ERR_ADDRESS")
+        return Address(value.to_bytes(20, "big"))
+    if isinstance(value, (bytes, bytearray)):
+        b = bytes(value)
+        if len(b) != 20:
+            raise gl.vm.UserError("ERR_ADDRESS")
+        return Address(b)
+    raise gl.vm.UserError("ERR_ADDRESS")
+
+
 def _now() -> int:
     return int(time.time())  # VERIFY-AT-STUDIO
 
@@ -80,16 +101,18 @@ class Contract(gl.Contract):
         self.event_count = 0
 
     @gl.public.write
-    def set_writer(self, writer: Address) -> None:
+    def set_writer(self, writer) -> None:  # VERIFY-AT-STUDIO
+        writer_addr = _coerce_address(writer)
         if gl.message.sender_address != self.owner:  # VERIFY-AT-STUDIO
             raise gl.vm.UserError("ERR_NOT_OWNER")
         if self.writer_set:
             raise gl.vm.UserError("ERR_WRITER_SET")
-        self.writer = Address(writer)
+        self.writer = writer_addr
         self.writer_set = True
 
     @gl.public.write
-    def append_event(self, domain: str, kind: u8, report_id: u256, hunter: Address) -> None:
+    def append_event(self, domain: str, kind: u8, report_id: u256, hunter) -> None:  # VERIFY-AT-STUDIO
+        h_addr = _coerce_address(hunter)
         if gl.message.sender_address != self.writer:  # VERIFY-AT-STUDIO
             raise gl.vm.UserError("ERR_NOT_WRITER")
         if kind not in (1, 2, 3):
@@ -112,7 +135,6 @@ class Contract(gl.Contract):
 
         self.event_count += 1
         eid = self.event_count
-        h_addr = Address(hunter)
 
         self.event_domain[eid] = domain
         self.event_kind[eid] = kind
@@ -203,12 +225,12 @@ class Contract(gl.Contract):
         return self.event_count
 
     @gl.public.view
-    def get_hunter_confirmed(self, addr: Address) -> u256:
-        return self.hunter_confirmed.get(Address(addr), 0)
+    def get_hunter_confirmed(self, addr) -> u256:  # VERIFY-AT-STUDIO
+        return self.hunter_confirmed.get(_coerce_address(addr), 0)
 
     @gl.public.view
-    def get_hunter_neutralized(self, addr: Address) -> u256:
-        return self.hunter_neutralized.get(Address(addr), 0)
+    def get_hunter_neutralized(self, addr) -> u256:  # VERIFY-AT-STUDIO
+        return self.hunter_neutralized.get(_coerce_address(addr), 0)
 
     @gl.public.view
     def get_writer(self) -> str:

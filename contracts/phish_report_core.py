@@ -57,6 +57,27 @@ class _Recipient:
         pass
 
 
+def _coerce_address(value) -> Address:
+    """Studio UI may serialize address inputs as hex str, int, or bytes."""
+    if isinstance(value, Address):
+        return value
+    if isinstance(value, str):
+        try:
+            return Address(value.strip())
+        except Exception:
+            raise gl.vm.UserError("ERR_ADDRESS")
+    if isinstance(value, int):
+        if value < 0 or value >= (1 << 160):
+            raise gl.vm.UserError("ERR_ADDRESS")
+        return Address(value.to_bytes(20, "big"))
+    if isinstance(value, (bytes, bytearray)):
+        b = bytes(value)
+        if len(b) != 20:
+            raise gl.vm.UserError("ERR_ADDRESS")
+        return Address(b)
+    raise gl.vm.UserError("ERR_ADDRESS")
+
+
 # Duplicated from brand_registry.py because Studio deploys single self-contained files.
 def _normalize_domain(raw: str) -> str:
     """Normalize domain name or raise gl.vm.UserError("ERR_DOMAIN_FORMAT")."""
@@ -373,9 +394,9 @@ class Contract(gl.Contract):
     hunter_cleared_count: TreeMap[Address, u256]
     hunter_suspicious_count: TreeMap[Address, u256]
 
-    def __init__(self, registry_addr: Address, blocklist_addr: Address):
-        self.registry_addr = Address(registry_addr)
-        self.blocklist_addr = Address(blocklist_addr)
+    def __init__(self, registry_addr, blocklist_addr):  # VERIFY-AT-STUDIO
+        self.registry_addr = _coerce_address(registry_addr)
+        self.blocklist_addr = _coerce_address(blocklist_addr)
         self.report_count = 0
 
     def _sender(self) -> Address:
@@ -1080,8 +1101,8 @@ class Contract(gl.Contract):
         return self.report_count
 
     @gl.public.view
-    def get_hunter_stats(self, addr: Address) -> dict:
-        a = Address(addr)
+    def get_hunter_stats(self, addr) -> dict:  # VERIFY-AT-STUDIO
+        a = _coerce_address(addr)
         return {
             "open": self.hunter_open_count.get(a, 0),
             "confirmed": self.hunter_confirmed_count.get(a, 0),

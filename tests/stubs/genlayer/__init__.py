@@ -22,26 +22,45 @@ class Return:
         self.value = value
 
 
-class Address:
-    """Wraps a hex string, equality by normalized value."""
+class Address(bytes):
+    """Twenty-byte address value with GenVM-like constructor semantics."""
 
-    def __init__(self, value: str | Address):
-        if isinstance(value, Address):
-            self.value = value.value
-        elif isinstance(value, str):
-            self.value = value.lower().strip()
-        else:
-            self.value = str(value).lower().strip()
+    def __new__(cls, value: str | bytes):
+        if isinstance(value, int):
+            raise OverflowError("cannot fit 'int' into an index-sized integer")
+        if isinstance(value, str):
+            normalized = value.lower().strip()
+            if len(normalized) != 42 or not normalized.startswith("0x"):
+                raise ValueError("Address string must contain 20 hex bytes")
+            try:
+                raw = bytes.fromhex(normalized[2:])
+            except ValueError:
+                raise ValueError("Address string must contain 20 hex bytes")
+            if len(raw) != 20:
+                raise ValueError("Address string must contain 20 hex bytes")
+            return super().__new__(cls, raw)
+        if isinstance(value, (bytes, Address)):
+            raw = bytes(value)
+            if len(raw) != 20:
+                raise ValueError("Address bytes must be exactly 20 bytes")
+            return super().__new__(cls, raw)
+        raise TypeError("Address accepts only hex strings or 20 raw bytes")
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Address):
-            return self.value == other.value
+            return bytes(self) == bytes(other)
         if isinstance(other, str):
-            return self.value == other.lower().strip()
-        return False
+            try:
+                return bytes(self) == bytes(Address(other))
+            except (TypeError, ValueError):
+                return False
+        return bytes.__eq__(self, other)
 
-    def __hash__(self) -> int:
-        return hash(self.value)
+    __hash__ = bytes.__hash__
+
+    @property
+    def value(self) -> str:
+        return "0x" + self.hex()
 
     def __str__(self) -> str:
         return self.value
@@ -104,7 +123,7 @@ class _EVM:
     @staticmethod
     def contract_interface(interface_cls: type) -> type:
         def __init__(self, address: Address | str) -> None:
-            self._address = Address(address)
+            self._address = address if isinstance(address, Address) else Address(address)
 
         def emit_transfer(self, *, value: int) -> None:
             gl.transfers.append((self._address, int(value)))
@@ -184,7 +203,7 @@ class _ViewProxy:
 class _WriteProxy:
     def __init__(self, target: Any, sender: Address, value: int) -> None:
         self._target = target
-        self._sender = Address(sender)
+        self._sender = sender if isinstance(sender, Address) else Address(sender)
         self._value = value
 
     def __getattr__(self, name: str) -> Any:
@@ -262,13 +281,13 @@ class _GL:
         self.wrap_leader_result = False
 
     def get_contract_at(self, addr: Address | str) -> Any:
-        a = Address(addr)
+        a = addr if isinstance(addr, Address) else Address(addr)
         if a not in self.contracts:
             raise KeyError(f"No contract registered at address {a}")
         return _ContractProxy(self.contracts[a])
 
     def register_contract(self, addr: Address | str, instance: Any) -> None:
-        a = Address(addr)
+        a = addr if isinstance(addr, Address) else Address(addr)
         instance.address = a
         self.contracts[a] = instance
 

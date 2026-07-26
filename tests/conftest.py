@@ -38,7 +38,7 @@ def registry():
     gl.message.value = 0
 
     def set_caller(addr: str | Address) -> None:
-        gl.message.sender_address = Address(addr)
+        gl.message.sender_address = addr if isinstance(addr, Address) else Address(addr)
 
     c.set_caller = set_caller
     return c
@@ -90,7 +90,9 @@ def system():
             self.hunter = hunter
 
         def set_caller(self, addr: str | Address, value: int = 0) -> None:
-            gl.message.sender_address = Address(addr)
+            gl.message.sender_address = (
+                addr if isinstance(addr, Address) else Address(addr)
+            )
             gl.message.value = value
 
     return SystemEnv()
