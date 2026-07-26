@@ -139,7 +139,7 @@ class Contract(gl.Contract):
         blocklist = gl.get_contract_at(self.blocklist_addr)  # VERIFY-AT-STUDIO
         return blocklist.get_domain_state(domain)  # VERIFY-AT-STUDIO
 
-    @gl.public.write
+    @gl.public.write.payable  # VERIFY-AT-STUDIO
     def fund_pool(self, brand_id: u256) -> None:
         brand_info = self._registry().get_brand(brand_id)
         if not brand_info["active"]:
@@ -186,7 +186,7 @@ class Contract(gl.Contract):
             "required_stake": req_stake,
         }
 
-    @gl.public.write
+    @gl.public.write.payable  # VERIFY-AT-STUDIO
     def submit_report(self, brand_id: u256, suspect_url: str) -> u256:
         # Guard 1: URL length & scheme
         if len(suspect_url) > MAX_URL_LEN:

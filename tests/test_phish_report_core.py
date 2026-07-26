@@ -8,6 +8,28 @@ from phish_report_core import (
 )
 
 
+def test_payable_enforcement(system):
+    system.set_caller(system.admin)
+    brand_id = system.registry.register_brand("Brand Acme", "acme.com", "Scope")
+
+    # Non-payable method set_bounty called with value > 0 raises ERR_NON_PAYABLE
+    system.set_caller(system.admin, value=100)
+    with pytest.raises(ValueError, match="ERR_NON_PAYABLE"):
+        system.core.set_bounty(brand_id, BOUNTY_MIN)
+
+    # Payable methods fund_pool and submit_report accept value > 0
+    system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT)
+    system.core.fund_pool(brand_id)
+
+    system.set_caller(system.admin, value=0)
+    system.core.set_bounty(brand_id, BOUNTY_MIN)
+    stake = system.core.get_required_stake(brand_id)
+
+    system.set_caller(system.hunter, value=stake)
+    rid = system.core.submit_report(brand_id, "https://evil-acme.com")
+    assert rid == 1
+
+
 def test_fund_pool(system):
     # Register brand with admin caller
     system.set_caller(system.admin)
@@ -44,7 +66,9 @@ def test_brand_inactive_or_unknown(system):
         system.core.fund_pool(999)
 
     # Inactive brand -> ERR_BRAND_INACTIVE
+    system.set_caller(system.admin, value=0)
     system.registry.set_active(brand_id, False)
+    system.set_caller(system.admin, value=MIN_FIRST_DEPOSIT)
     with pytest.raises(ValueError, match="ERR_BRAND_INACTIVE"):
         system.core.fund_pool(brand_id)
 
@@ -263,14 +287,17 @@ def test_adjudicate_stub(system):
     rid = system.core.submit_report(brand_id, "https://evil-acme.com")
 
     # Unknown report -> ERR_NOT_FOUND
+    system.set_caller(system.hunter, value=0)
     with pytest.raises(ValueError, match="ERR_NOT_FOUND"):
         system.core.adjudicate(999)
 
     # Valid report -> raises NotImplementedError("ERR_PHASE3")
+    system.set_caller(system.hunter, value=0)
     with pytest.raises(NotImplementedError, match="ERR_PHASE3"):
         system.core.adjudicate(rid)
 
     # Non-SUBMITTED status -> ERR_NOT_SUBMITTED
     system.core.report_status[rid] = 2  # CONFIRMED
+    system.set_caller(system.hunter, value=0)
     with pytest.raises(ValueError, match="ERR_NOT_SUBMITTED"):
         system.core.adjudicate(rid)

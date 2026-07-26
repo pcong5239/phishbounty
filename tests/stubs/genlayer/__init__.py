@@ -5,6 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 
+class FetchError(Exception):
+    pass
+
+
+class ConsensusError(Exception):
+    pass
+
+
 class Address:
     """Wraps a hex string, equality by normalized value."""
 
@@ -70,15 +78,25 @@ class _Block:
         self.timestamp = 1_000_000
 
 
+class _PublicWrite:
+    def __call__(self, func: Any) -> Any:
+        func.__is_write__ = True
+        func.__is_payable__ = False
+        return func
+
+    def payable(self, func: Any) -> Any:
+        func.__is_write__ = True
+        func.__is_payable__ = True
+        return func
+
+
 class _Public:
+    def __init__(self) -> None:
+        self.write = _PublicWrite()
+
     @staticmethod
     def view(func: Any) -> Any:
         func.__is_view__ = True
-        return func
-
-    @staticmethod
-    def write(func: Any) -> Any:
-        func.__is_write__ = True
         return func
 
 
@@ -97,6 +115,43 @@ class Contract:
                         setattr(instance, name, DynArray())
         return instance
 
+    def __getattribute__(self, name: str) -> Any:
+        attr = super().__getattribute__(name)
+        if callable(attr) and hasattr(attr, "__is_write__"):
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                if not getattr(attr, "__is_payable__", False) and gl.message.value > 0:
+                    raise ValueError("ERR_NON_PAYABLE")
+                return attr(*args, **kwargs)
+            return wrapper
+        return attr
+
+
+class _NondetWeb:
+    def render(self, url: str, mode: str = "text") -> str:
+        if url not in gl.web_pages or gl.web_pages[url] is None:
+            raise FetchError(f"HTTP_FETCH_FAILED: {url}")
+        return gl.web_pages[url]
+
+
+class _Nondet:
+    def __init__(self) -> None:
+        self.web = _NondetWeb()
+
+    def exec_prompt(self, prompt: str) -> str:
+        gl.prompts_history.append(prompt)
+        if gl.prompt_responses:
+            return gl.prompt_responses.pop(0)
+        return "{}"
+
+
+class _VM:
+    def run_nondet_unsafe(self, leader_fn: Any, validator_fn: Any) -> Any:
+        payload = leader_fn()
+        ok = validator_fn(payload)
+        if not ok:
+            raise ConsensusError("MAJORITY_DISAGREE")
+        return payload
+
 
 class _GL:
     def __init__(self) -> None:
@@ -104,7 +159,13 @@ class _GL:
         self.public = _Public()
         self.message = _Message()
         self.block = _Block()
+        self.nondet = _Nondet()
+        self.vm = _VM()
         self.contracts: dict[Address, Any] = {}
+        self.web_pages: dict[str, str | None] = {}
+        self.prompt_responses: list[str] = []
+        self.prompts_history: list[str] = []
+        self.transfers: list[tuple[Address, int]] = []
 
     def get_contract_at(self, addr: Address | str) -> Any:
         a = Address(addr)
@@ -122,6 +183,9 @@ class _GL:
     def advance_time(self, seconds: int) -> None:
         self.block.timestamp += seconds
 
+    def transfer(self, to: Address | str, amount: int) -> None:
+        self.transfers.append((Address(to), amount))
+
 
 gl = _GL()
 
@@ -134,4 +198,6 @@ __all__ = [
     "u8",
     "u64",
     "u256",
+    "FetchError",
+    "ConsensusError",
 ]
