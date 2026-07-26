@@ -80,6 +80,7 @@ def test_lifecycle_and_state_machine(blocklist):
     assert blocklist.get_domain_state(domain) == 0
     assert blocklist.is_blocked(domain) is False
     assert blocklist.get_hunter_confirmed(hunter) == 0
+    assert blocklist.get_hunter_neutralized(hunter) == 0
 
     # Invalid transitions before LISTED
     with pytest.raises(ValueError, match="ERR_STATE"):
@@ -94,6 +95,7 @@ def test_lifecycle_and_state_machine(blocklist):
     assert blocklist.get_domain_state(domain) == 1
     assert blocklist.is_blocked(domain) is True
     assert blocklist.get_hunter_confirmed(hunter) == 1
+    assert blocklist.get_last_event_at(domain) == 1000
 
     # Invalid transitions while LISTED
     with pytest.raises(ValueError, match="ERR_STATE"):
@@ -108,6 +110,8 @@ def test_lifecycle_and_state_machine(blocklist):
     assert blocklist.get_domain_state(domain) == 2
     assert blocklist.is_blocked(domain) is False
     assert blocklist.get_hunter_confirmed(hunter) == 1  # No increment on NEUTRALIZED
+    assert blocklist.get_hunter_neutralized(hunter) == 1
+    assert blocklist.get_last_event_at(domain) == 2000
 
     # Invalid transitions while NEUTRALIZED
     with pytest.raises(ValueError, match="ERR_STATE"):
@@ -122,6 +126,7 @@ def test_lifecycle_and_state_machine(blocklist):
     assert blocklist.get_domain_state(domain) == 1
     assert blocklist.is_blocked(domain) is True
     assert blocklist.get_hunter_confirmed(hunter) == 2  # Increments on RELISTED
+    assert blocklist.get_last_event_at(domain) == 3000
 
     # History verification
     history = blocklist.get_domain_history(domain)
@@ -144,5 +149,7 @@ def test_views_malformed_and_unknown_inputs(blocklist):
     assert blocklist.is_blocked("https://malformed.com") is False
     assert blocklist.get_domain_state("https://malformed.com") == 0
     assert blocklist.get_domain_history("https://malformed.com") == []
+    assert blocklist.get_last_event_at("unknown.com") == 0
+    assert blocklist.get_last_event_at("https://malformed.com") == 0
     assert blocklist.get_recent_events(5) == []
     assert blocklist.get_event_count() == 0

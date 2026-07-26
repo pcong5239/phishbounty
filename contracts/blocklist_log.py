@@ -66,6 +66,7 @@ class Contract(gl.Contract):
     domain_event_ids: TreeMap[str, DynArray[u256]]
     domain_state: TreeMap[str, u8]
     hunter_confirmed: TreeMap[Address, u256]
+    hunter_neutralized: TreeMap[Address, u256]
 
     def __init__(self):
         self.owner = gl.message.sender  # VERIFY-AT-STUDIO
@@ -123,6 +124,7 @@ class Contract(gl.Contract):
             self.hunter_confirmed[h_addr] = self.hunter_confirmed.get(h_addr, 0) + 1
         elif kind == 2:
             self.domain_state[domain] = 2
+            self.hunter_neutralized[h_addr] = self.hunter_neutralized.get(h_addr, 0) + 1
 
     @gl.public.view
     def is_blocked(self, domain: str) -> bool:
@@ -137,6 +139,21 @@ class Contract(gl.Contract):
         except ValueError:
             return 0
         return self.domain_state.get(domain, 0)
+
+    @gl.public.view
+    def get_last_event_at(self, domain: str) -> u64:
+        try:
+            norm = _normalize_domain(domain)
+            if norm != domain:
+                return 0
+        except ValueError:
+            return 0
+
+        eids = self.domain_event_ids.get(domain, [])
+        if len(eids) == 0:
+            return 0
+        last_eid = eids[len(eids) - 1]
+        return self.event_at.get(last_eid, 0)
 
     @gl.public.view
     def get_domain_history(self, domain: str) -> list[dict]:
@@ -183,6 +200,10 @@ class Contract(gl.Contract):
     @gl.public.view
     def get_hunter_confirmed(self, addr: Address) -> u256:
         return self.hunter_confirmed.get(Address(addr), 0)
+
+    @gl.public.view
+    def get_hunter_neutralized(self, addr: Address) -> u256:
+        return self.hunter_neutralized.get(Address(addr), 0)
 
     @gl.public.view
     def get_writer(self) -> str:
