@@ -17,6 +17,11 @@ class UserError(ValueError):
     pass
 
 
+class Return:
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+
 class Address:
     """Wraps a hex string, equality by normalized value."""
 
@@ -229,10 +234,12 @@ class _Nondet:
 
 class _VM:
     UserError = UserError
+    Return = Return
 
     def run_nondet_unsafe(self, leader_fn: Any, validator_fn: Any) -> Any:
         payload = leader_fn()
-        ok = validator_fn(payload)
+        validator_input = Return(payload) if gl.wrap_leader_result else payload
+        ok = validator_fn(validator_input)
         if not ok:
             raise ConsensusError("MAJORITY_DISAGREE")
         return payload
@@ -252,6 +259,7 @@ class _GL:
         self.prompts_history: list[str] = []
         self.transfers: list[tuple[Address, int]] = []
         self.current_time = 1_000_000
+        self.wrap_leader_result = False
 
     def get_contract_at(self, addr: Address | str) -> Any:
         a = Address(addr)

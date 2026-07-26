@@ -59,6 +59,7 @@ def system():
     gl.prompt_responses.clear()
     gl.prompts_history.clear()
     gl.transfers.clear()
+    gl.wrap_leader_result = False
 
     gl.message.sender_address = deployer
     gl.message.value = 0

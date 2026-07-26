@@ -326,6 +326,22 @@ def parse_reverify_payload(raw: str | dict) -> dict:
     return {"state": state, "confidence": confidence}
 
 
+def _unwrap_leader(result):
+    """Unwrap validator leader values without trusting wrapper structure."""
+    if isinstance(result, Exception):
+        return None
+    if isinstance(result, (str, dict)):
+        return result
+    for attr_name in ("value", "calldata", "data"):
+        try:
+            payload = getattr(result, attr_name)
+        except Exception:
+            continue
+        if isinstance(payload, (str, dict)):
+            return payload
+    return None  # VERIFY-AT-STUDIO
+
+
 class Contract(gl.Contract):
     registry_addr: Address
     blocklist_addr: Address
@@ -746,9 +762,16 @@ class Contract(gl.Contract):
                 payload.update(parsed)
                 return json.dumps(payload, sort_keys=True)
 
-        def validator_fn(leader_payload_str: str) -> bool:
+        def validator_fn(leader_result) -> bool:
+            leader_payload_value = _unwrap_leader(leader_result)  # VERIFY-AT-STUDIO
+            if leader_payload_value is None:
+                return False
             try:
-                leader_payload = json.loads(leader_payload_str)
+                leader_payload = (
+                    leader_payload_value
+                    if isinstance(leader_payload_value, dict)
+                    else json.loads(leader_payload_value)
+                )
                 if not isinstance(leader_payload, dict) or "outcome" not in leader_payload:
                     return False
             except Exception:
@@ -974,9 +997,16 @@ class Contract(gl.Contract):
                 payload["confidence"] = confidence
             return json.dumps(payload, sort_keys=True)
 
-        def validator_fn(leader_payload_str: str) -> bool:
+        def validator_fn(leader_result) -> bool:
+            leader_payload_value = _unwrap_leader(leader_result)  # VERIFY-AT-STUDIO
+            if leader_payload_value is None:
+                return False
             try:
-                leader_payload = json.loads(leader_payload_str)
+                leader_payload = (
+                    leader_payload_value
+                    if isinstance(leader_payload_value, dict)
+                    else json.loads(leader_payload_value)
+                )
                 if not isinstance(leader_payload, dict):
                     return False
                 leader_outcome = leader_payload.get("outcome")
