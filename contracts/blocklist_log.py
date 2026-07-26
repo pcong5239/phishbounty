@@ -12,48 +12,48 @@ def _now() -> int:
 
 
 def _normalize_domain(raw: str) -> str:
-    """Normalize domain name or raise ValueError("ERR_DOMAIN_FORMAT")."""
+    """Normalize domain name or raise gl.vm.UserError("ERR_DOMAIN_FORMAT")."""
     if not isinstance(raw, str):
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     s = raw.strip().lower()
     if s.endswith("."):
         s = s[:-1]
 
     if not s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if "://" in raw or "/" in s or "?" in s or "#" in s or "@" in s or ":" in s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     for ch in s:
         if ch.isspace():
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if len(s) > 253:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if "[" in s or "]" in s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     labels = s.split(".")
     if len(labels) < 2:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if all(label.isdigit() for label in labels):
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if len(labels) == 4 and all(label.isdigit() for label in labels):
         if all(0 <= int(label) <= 255 for label in labels):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     for label in labels:
         if len(label) == 0 or len(label) > 63:
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
         if label.startswith("-") or label.endswith("-"):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
         if not all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in label):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     return s
 
@@ -82,33 +82,33 @@ class Contract(gl.Contract):
     @gl.public.write
     def set_writer(self, writer: Address) -> None:
         if gl.message.sender_address != self.owner:  # VERIFY-AT-STUDIO
-            raise ValueError("ERR_NOT_OWNER")
+            raise gl.vm.UserError("ERR_NOT_OWNER")
         if self.writer_set:
-            raise ValueError("ERR_WRITER_SET")
+            raise gl.vm.UserError("ERR_WRITER_SET")
         self.writer = Address(writer)
         self.writer_set = True
 
     @gl.public.write
     def append_event(self, domain: str, kind: u8, report_id: u256, hunter: Address) -> None:
         if gl.message.sender_address != self.writer:  # VERIFY-AT-STUDIO
-            raise ValueError("ERR_NOT_WRITER")
+            raise gl.vm.UserError("ERR_NOT_WRITER")
         if kind not in (1, 2, 3):
-            raise ValueError("ERR_KIND")
+            raise gl.vm.UserError("ERR_KIND")
 
         try:
             norm = _normalize_domain(domain)
             if norm != domain:
-                raise ValueError("ERR_DOMAIN_FORMAT")
-        except ValueError:
-            raise ValueError("ERR_DOMAIN_FORMAT")
+                raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
+        except gl.vm.UserError:
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
         curr_state = self.domain_state.get(domain, 0)
         if kind == 1 and curr_state != 0:
-            raise ValueError("ERR_STATE")
+            raise gl.vm.UserError("ERR_STATE")
         if kind == 2 and curr_state != 1:
-            raise ValueError("ERR_STATE")
+            raise gl.vm.UserError("ERR_STATE")
         if kind == 3 and curr_state != 2:
-            raise ValueError("ERR_STATE")
+            raise gl.vm.UserError("ERR_STATE")
 
         self.event_count += 1
         eid = self.event_count
@@ -141,7 +141,7 @@ class Contract(gl.Contract):
             norm = _normalize_domain(domain)
             if norm != domain:
                 return 0
-        except ValueError:
+        except gl.vm.UserError:
             return 0
         return self.domain_state.get(domain, 0)
 
@@ -151,7 +151,7 @@ class Contract(gl.Contract):
             norm = _normalize_domain(domain)
             if norm != domain:
                 return 0
-        except ValueError:
+        except gl.vm.UserError:
             return 0
 
         eids = self.domain_event_ids.get(domain, [])
@@ -166,7 +166,7 @@ class Contract(gl.Contract):
             norm = _normalize_domain(domain)
             if norm != domain:
                 return []
-        except ValueError:
+        except gl.vm.UserError:
             return []
 
         eids = self.domain_event_ids.get(domain, [])

@@ -58,48 +58,48 @@ class _Recipient:
 
 # Duplicated from brand_registry.py because Studio deploys single self-contained files.
 def _normalize_domain(raw: str) -> str:
-    """Normalize domain name or raise ValueError("ERR_DOMAIN_FORMAT")."""
+    """Normalize domain name or raise gl.vm.UserError("ERR_DOMAIN_FORMAT")."""
     if not isinstance(raw, str):
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     s = raw.strip().lower()
     if s.endswith("."):
         s = s[:-1]
 
     if not s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if "://" in raw or "/" in s or "?" in s or "#" in s or "@" in s or ":" in s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     for ch in s:
         if ch.isspace():
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if len(s) > 253:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if "[" in s or "]" in s:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     labels = s.split(".")
     if len(labels) < 2:
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if all(label.isdigit() for label in labels):
-        raise ValueError("ERR_DOMAIN_FORMAT")
+        raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     if len(labels) == 4 and all(label.isdigit() for label in labels):
         if all(0 <= int(label) <= 255 for label in labels):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     for label in labels:
         if len(label) == 0 or len(label) > 63:
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
         if label.startswith("-") or label.endswith("-"):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
         if not all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in label):
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
     return s
 
@@ -168,33 +168,41 @@ def build_skeptic_prompt(
     )
 
 
-def parse_verdict_payload(raw: str) -> dict:
+def parse_verdict_payload(raw: str | dict) -> dict:
     """Parse raw LLM response JSON and validate coherence rules."""
-    if not isinstance(raw, str):
-        raise ValueError("ERR_PAYLOAD")
+    if isinstance(raw, dict):
+        data = raw
+        try:
+            encoded = json.dumps(data, sort_keys=True).encode("utf-8")
+        except Exception:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+        if len(encoded) > MAX_PAYLOAD_BYTES:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+    elif isinstance(raw, str):
+        s = raw.strip()
+        if s.startswith("```json"):
+            s = s[7:]
+            if s.endswith("```"):
+                s = s[:-3]
+        elif s.startswith("```"):
+            s = s[3:]
+            if s.endswith("```"):
+                s = s[:-3]
+        s = s.strip()
 
-    s = raw.strip()
-    if s.startswith("```json"):
-        s = s[7:]
-        if s.endswith("```"):
-            s = s[:-3]
-    elif s.startswith("```"):
-        s = s[3:]
-        if s.endswith("```"):
-            s = s[:-3]
-    s = s.strip()
+        if len(s.encode("utf-8")) > MAX_PAYLOAD_BYTES:
+            raise gl.vm.UserError("ERR_PAYLOAD")
 
-    if len(s.encode("utf-8")) > MAX_PAYLOAD_BYTES:
-        raise ValueError("ERR_PAYLOAD")
-
-    try:
-        data = json.loads(s)  # VERIFY-AT-STUDIO
-    except Exception:
-        raise ValueError("ERR_PAYLOAD")
+        try:
+            data = json.loads(s)  # VERIFY-AT-STUDIO
+        except Exception:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+    else:
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     expected_keys = {"verdict", "confidence", "signals", "evidence_sufficient", "reason"}
     if not isinstance(data, dict) or set(data.keys()) != expected_keys:
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     v_str = data["verdict"]
     verdict_map = {
@@ -203,39 +211,39 @@ def parse_verdict_payload(raw: str) -> dict:
         "CLEARED": VERDICT_CLEARED,
     }
     if v_str not in verdict_map:
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
     v_int = verdict_map[v_str]
 
     conf = data["confidence"]
     if isinstance(conf, bool) or not isinstance(conf, int) or not (0 <= conf <= 100):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     sigs = data["signals"]
     if not isinstance(sigs, list) or not (1 <= len(sigs) <= 8):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
     if any(isinstance(x, bool) or not isinstance(x, int) or not (1 <= x <= 8) for x in sigs):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
     if len(set(sigs)) != len(sigs):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
     if SIGNAL_NONE_OBSERVED in sigs and len(sigs) > 1:
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     ev = data["evidence_sufficient"]
     if not isinstance(ev, bool):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     reason = data["reason"]
     if not isinstance(reason, str) or len(reason) > MAX_REASON_LEN:
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     # Coherence rules
     if v_int == VERDICT_CONFIRMED_PHISHING:
         if conf < 70 or len(sigs) < 2 or SIGNAL_NONE_OBSERVED in sigs:
-            raise ValueError("ERR_PAYLOAD")
+            raise gl.vm.UserError("ERR_PAYLOAD")
 
     if v_int == VERDICT_CLEARED:
         if not (sigs == [SIGNAL_NONE_OBSERVED] or conf <= 30):
-            raise ValueError("ERR_PAYLOAD")
+            raise gl.vm.UserError("ERR_PAYLOAD")
 
     return {
         "verdict": v_int,
@@ -268,43 +276,51 @@ def build_reverify_prompt(
     )
 
 
-def parse_reverify_payload(raw: str) -> dict:
+def parse_reverify_payload(raw: str | dict) -> dict:
     """Parse the strict re-verification response."""
-    if not isinstance(raw, str):
-        raise ValueError("ERR_PAYLOAD")
+    if isinstance(raw, dict):
+        data = raw
+        try:
+            encoded = json.dumps(data, sort_keys=True).encode("utf-8")
+        except Exception:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+        if len(encoded) > MAX_PAYLOAD_BYTES:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+    elif isinstance(raw, str):
+        s = raw.strip()
+        if s.startswith("```json"):
+            s = s[7:]
+            if s.endswith("```"):
+                s = s[:-3]
+        elif s.startswith("```"):
+            s = s[3:]
+            if s.endswith("```"):
+                s = s[:-3]
+        s = s.strip()
 
-    s = raw.strip()
-    if s.startswith("```json"):
-        s = s[7:]
-        if s.endswith("```"):
-            s = s[:-3]
-    elif s.startswith("```"):
-        s = s[3:]
-        if s.endswith("```"):
-            s = s[:-3]
-    s = s.strip()
+        if len(s.encode("utf-8")) > MAX_PAYLOAD_BYTES:
+            raise gl.vm.UserError("ERR_PAYLOAD")
 
-    if len(s.encode("utf-8")) > MAX_PAYLOAD_BYTES:
-        raise ValueError("ERR_PAYLOAD")
-
-    try:
-        data = json.loads(s)  # VERIFY-AT-STUDIO
-    except Exception:
-        raise ValueError("ERR_PAYLOAD")
+        try:
+            data = json.loads(s)  # VERIFY-AT-STUDIO
+        except Exception:
+            raise gl.vm.UserError("ERR_PAYLOAD")
+    else:
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     if not isinstance(data, dict) or set(data.keys()) != {"state", "confidence"}:
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     state = data["state"]
     confidence = data["confidence"]
     if state not in ("ACTIVE", "BENIGN"):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
     if (
         isinstance(confidence, bool)
         or not isinstance(confidence, int)
         or not (0 <= confidence <= 100)
     ):
-        raise ValueError("ERR_PAYLOAD")
+        raise gl.vm.UserError("ERR_PAYLOAD")
 
     return {"state": state, "confidence": confidence}
 
@@ -496,15 +512,15 @@ class Contract(gl.Contract):
     def fund_pool(self, brand_id: u256) -> None:
         brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if not brand_info["active"]:
-            raise ValueError("ERR_BRAND_INACTIVE")
+            raise gl.vm.UserError("ERR_BRAND_INACTIVE")
 
         val = self._value()
         if val <= 0:
-            raise ValueError("ERR_ZERO_VALUE")
+            raise gl.vm.UserError("ERR_ZERO_VALUE")
 
         curr_bal = self.pool_balance.get(brand_id, 0)
         if curr_bal == 0 and val < MIN_FIRST_DEPOSIT:
-            raise ValueError("ERR_MIN_DEPOSIT")
+            raise gl.vm.UserError("ERR_MIN_DEPOSIT")
 
         self.pool_balance[brand_id] = curr_bal + val
 
@@ -512,10 +528,10 @@ class Contract(gl.Contract):
     def set_bounty(self, brand_id: u256, amount: u256) -> None:
         brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if self._sender() != Address(brand_info["admin"]):
-            raise ValueError("ERR_NOT_ADMIN")
+            raise gl.vm.UserError("ERR_NOT_ADMIN")
 
         if not (BOUNTY_MIN <= amount <= BOUNTY_MAX):
-            raise ValueError("ERR_BOUNTY_RANGE")
+            raise gl.vm.UserError("ERR_BOUNTY_RANGE")
 
         self.pool_bounty[brand_id] = amount
 
@@ -523,7 +539,7 @@ class Contract(gl.Contract):
     def get_required_stake(self, brand_id: u256) -> u256:
         bounty = self.pool_bounty.get(brand_id, 0)
         if bounty == 0:
-            raise ValueError("ERR_NO_BOUNTY")
+            raise gl.vm.UserError("ERR_NO_BOUNTY")
         return max(bounty // 5, MIN_STAKE_ABS)
 
     @gl.public.view
@@ -543,60 +559,60 @@ class Contract(gl.Contract):
     def submit_report(self, brand_id: u256, suspect_url: str) -> u256:
         # Guard 1: URL length & scheme
         if len(suspect_url) > MAX_URL_LEN:
-            raise ValueError("ERR_URL_LENGTH")
+            raise gl.vm.UserError("ERR_URL_LENGTH")
 
         if suspect_url.startswith("http://"):
             rest = suspect_url[7:]
         elif suspect_url.startswith("https://"):
             rest = suspect_url[8:]
         else:
-            raise ValueError("ERR_URL_SCHEME")
+            raise gl.vm.UserError("ERR_URL_SCHEME")
 
         # Guard 2: Extract hostname & normalize
         host_segment = rest.split("/")[0].split("?")[0].split("#")[0]
         if "@" in host_segment:
-            raise ValueError("ERR_DOMAIN_FORMAT")
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
         host = host_segment.split(":")[0]
         norm_domain = _normalize_domain(host)
 
         # Guard 3: Registry checks
         if self._registry().view().is_official_domain(norm_domain):  # VERIFY-AT-STUDIO
-            raise ValueError("ERR_OFFICIAL_DOMAIN")
+            raise gl.vm.UserError("ERR_OFFICIAL_DOMAIN")
 
         brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
         if not brand_info["active"]:
-            raise ValueError("ERR_BRAND_INACTIVE")
+            raise gl.vm.UserError("ERR_BRAND_INACTIVE")
 
         if self._sender() == Address(brand_info["admin"]):
-            raise ValueError("ERR_SELF_REPORT")
+            raise gl.vm.UserError("ERR_SELF_REPORT")
 
         # Guard 4: Pool checks
         bounty = self.pool_bounty.get(brand_id, 0)
         if bounty == 0:
-            raise ValueError("ERR_NO_BOUNTY")
+            raise gl.vm.UserError("ERR_NO_BOUNTY")
 
         bal = self.pool_balance.get(brand_id, 0)
         res = self.pool_reserved.get(brand_id, 0)
         if bal - res < bounty:
-            raise ValueError("ERR_POOL_INSUFFICIENT")
+            raise gl.vm.UserError("ERR_POOL_INSUFFICIENT")
 
         # Guard 5: Domain checks
         if self.pending_domain.get(norm_domain, 0) != 0:
-            raise ValueError("ERR_DUPLICATE_PENDING")
+            raise gl.vm.UserError("ERR_DUPLICATE_PENDING")
 
         if self.confirmed_domain.get(norm_domain, 0) != 0:
             if self._blocklist_state(norm_domain) != 2:
-                raise ValueError("ERR_ALREADY_CONFIRMED")
+                raise gl.vm.UserError("ERR_ALREADY_CONFIRMED")
 
         # Guard 6: Hunter checks
         open_count = self.hunter_open_count.get(self._sender(), 0)
         if open_count >= MAX_OPEN_PER_HUNTER:
-            raise ValueError("ERR_OPEN_CAP")
+            raise gl.vm.UserError("ERR_OPEN_CAP")
 
         req_stake = self.get_required_stake(brand_id)
         if self._value() != req_stake:
-            raise ValueError("ERR_STAKE_AMOUNT")
+            raise gl.vm.UserError("ERR_STAKE_AMOUNT")
 
         # Persistence & Effects
         self.report_count += 1
@@ -629,27 +645,27 @@ class Contract(gl.Contract):
     @gl.public.write.payable  # VERIFY-AT-STUDIO
     def appeal(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
-            raise ValueError("ERR_NOT_FOUND")
+            raise gl.vm.UserError("ERR_NOT_FOUND")
 
         status = self.report_status[report_id]
         if status not in (STATUS_CONFIRMED, STATUS_CLEARED):
-            raise ValueError("ERR_NOT_APPEALABLE")
+            raise gl.vm.UserError("ERR_NOT_APPEALABLE")
 
         if self._now() >= self.report_appeal_deadline[report_id]:
-            raise ValueError("ERR_APPEAL_WINDOW")
+            raise gl.vm.UserError("ERR_APPEAL_WINDOW")
 
         caller = self._sender()
         if status == STATUS_CONFIRMED:
             brand_id = self.report_brand[report_id]
             brand_info = self._registry().view().get_brand(brand_id)  # VERIFY-AT-STUDIO
             if caller != Address(brand_info["admin"]):
-                raise ValueError("ERR_NOT_PARTY")
+                raise gl.vm.UserError("ERR_NOT_PARTY")
         elif caller != self.report_hunter[report_id]:
-            raise ValueError("ERR_NOT_PARTY")
+            raise gl.vm.UserError("ERR_NOT_PARTY")
 
         appeal_stake = 2 * self.report_stake[report_id]
         if self._value() != appeal_stake:
-            raise ValueError("ERR_APPEAL_STAKE")
+            raise gl.vm.UserError("ERR_APPEAL_STAKE")
 
         self.report_status[report_id] = STATUS_APPEALED
         self.report_appellant[report_id] = caller
@@ -658,7 +674,7 @@ class Contract(gl.Contract):
     @gl.public.write
     def adjudicate(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
-            raise ValueError("ERR_NOT_FOUND")
+            raise gl.vm.UserError("ERR_NOT_FOUND")
 
         st = self.report_status[report_id]
         ret = self.report_retry[report_id]
@@ -669,7 +685,7 @@ class Contract(gl.Contract):
             or is_appeal
             or (st == STATUS_UNDETERMINED and ret == 1)
         ):
-            raise ValueError("ERR_NOT_ADJUDICABLE")
+            raise gl.vm.UserError("ERR_NOT_ADJUDICABLE")
 
         brand_id = self.report_brand[report_id]
         suspect_url = str(self.report_url[report_id])
@@ -704,11 +720,13 @@ class Contract(gl.Contract):
                     official_text,
                     suspect_text,
                 )
-            raw = gl.nondet.exec_prompt(prompt)  # VERIFY-AT-STUDIO
+            raw = gl.nondet.exec_prompt(  # VERIFY-AT-STUDIO
+                prompt, response_format="json"
+            )
 
             try:
                 parsed = parse_verdict_payload(raw)
-            except ValueError:
+            except gl.vm.UserError:
                 return ("BAD_PAYLOAD", None)
 
             return ("OK", parsed)
@@ -867,14 +885,14 @@ class Contract(gl.Contract):
     @gl.public.write  # VERIFY-AT-STUDIO
     def settle(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
-            raise ValueError("ERR_NOT_FOUND")
+            raise gl.vm.UserError("ERR_NOT_FOUND")
 
         status = self.report_status[report_id]
         if status not in (STATUS_CONFIRMED, STATUS_SUSPICIOUS, STATUS_CLEARED):
-            raise ValueError("ERR_NOT_SETTLEABLE")
+            raise gl.vm.UserError("ERR_NOT_SETTLEABLE")
 
         if self._now() < self.report_appeal_deadline[report_id]:
-            raise ValueError("ERR_WINDOW_OPEN")
+            raise gl.vm.UserError("ERR_WINDOW_OPEN")
 
         if status == STATUS_CONFIRMED:
             self._finalize_confirmed(report_id)
@@ -906,19 +924,19 @@ class Contract(gl.Contract):
     def reverify(self, domain: str) -> None:
         try:
             norm_domain = _normalize_domain(domain)
-        except ValueError:
-            raise ValueError("ERR_DOMAIN_FORMAT")
+        except gl.vm.UserError:
+            raise gl.vm.UserError("ERR_DOMAIN_FORMAT")
 
         if self._blocklist_state(norm_domain) != 1:
-            raise ValueError("ERR_NOT_BLOCKED")
+            raise gl.vm.UserError("ERR_NOT_BLOCKED")
 
         last_event_at = self._blocklist_last_event_at(norm_domain)
         if last_event_at + REVERIFY_COOLDOWN > self._now():
-            raise ValueError("ERR_COOLDOWN")
+            raise gl.vm.UserError("ERR_COOLDOWN")
 
         report_id = self.confirmed_domain.get(norm_domain, 0)
         if report_id == 0 or report_id not in self.report_brand:
-            raise ValueError("ERR_NOT_FOUND")
+            raise gl.vm.UserError("ERR_NOT_FOUND")
 
         suspect_url = str(self.report_url[report_id])
         brand_id = self.report_brand[report_id]
@@ -937,10 +955,12 @@ class Contract(gl.Contract):
             prompt = build_reverify_prompt(
                 brand_name, official_domain, suspect_text
             )
-            raw = gl.nondet.exec_prompt(prompt)  # VERIFY-AT-STUDIO
+            raw = gl.nondet.exec_prompt(  # VERIFY-AT-STUDIO
+                prompt, response_format="json"
+            )
             try:
                 parsed = parse_reverify_payload(raw)
-            except ValueError:
+            except gl.vm.UserError:
                 return ("BAD_PAYLOAD", None)
             return (parsed["state"], parsed["confidence"])
 
@@ -999,7 +1019,7 @@ class Contract(gl.Contract):
     @gl.public.view
     def get_report(self, report_id: u256) -> dict:
         if report_id not in self.report_brand:
-            raise ValueError("ERR_NOT_FOUND")
+            raise gl.vm.UserError("ERR_NOT_FOUND")
 
         return {
             "id": report_id,

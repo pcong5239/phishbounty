@@ -13,6 +13,10 @@ class ConsensusError(Exception):
     pass
 
 
+class UserError(ValueError):
+    pass
+
+
 class Address:
     """Wraps a hex string, equality by normalized value."""
 
@@ -211,14 +215,21 @@ class _Nondet:
     def __init__(self) -> None:
         self.web = _NondetWeb()
 
-    def exec_prompt(self, prompt: str) -> str:
+    def exec_prompt(
+        self, prompt: str, response_format: str | None = None
+    ) -> dict | str:
         gl.prompts_history.append(prompt)
         if gl.prompt_responses:
-            return gl.prompt_responses.pop(0)
-        return "{}"
+            response = gl.prompt_responses.pop(0)
+            if isinstance(response, dict):
+                return response
+            return str(response)
+        return {} if response_format == "json" else "{}"
 
 
 class _VM:
+    UserError = UserError
+
     def run_nondet_unsafe(self, leader_fn: Any, validator_fn: Any) -> Any:
         payload = leader_fn()
         ok = validator_fn(payload)
@@ -237,7 +248,7 @@ class _GL:
         self.vm = _VM()
         self.contracts: dict[Address, Any] = {}
         self.web_pages: dict[str, str | None] = {}
-        self.prompt_responses: list[str] = []
+        self.prompt_responses: list[dict | str] = []
         self.prompts_history: list[str] = []
         self.transfers: list[tuple[Address, int]] = []
         self.current_time = 1_000_000
