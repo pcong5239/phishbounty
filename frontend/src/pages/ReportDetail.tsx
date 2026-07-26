@@ -14,10 +14,12 @@ import {
   weiToGen,
 } from "../lib/format";
 
-/** Statuses in which the appeal window is relevant: CONFIRMED(2), SUSPICIOUS(3), CLEARED(4). */
-const APPEALABLE = new Set([2, 3, 4]);
+/** Only CONFIRMED(2) and CLEARED(4) can be appealed; SUSPICIOUS(3) goes straight to settlement. */
+const APPEALABLE = new Set([2, 4]);
+/** Statuses whose deadline gates settle(): CONFIRMED(2), SUSPICIOUS(3), CLEARED(4). */
+const AWAITING_SETTLEMENT = new Set([2, 3, 4]);
 
-function AppealCountdown({ deadline }: { deadline: number }) {
+function DeadlineCountdown({ deadline, appealable }: { deadline: number; appealable: boolean }) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 10_000);
@@ -25,13 +27,22 @@ function AppealCountdown({ deadline }: { deadline: number }) {
   }, []);
   const remaining = deadline - now;
   if (remaining <= 0) {
-    return <span>Appeal window closed — the report can be settled.</span>;
+    return (
+      <span>
+        {appealable
+          ? "Appeal window closed — the report can be settled."
+          : "Settlement window open — the report can be settled."}
+      </span>
+    );
   }
   const m = Math.floor(remaining / 60);
   const s = remaining % 60;
+  const clock = `${m}m ${s.toString().padStart(2, "0")}s`;
   return (
     <span>
-      Appeal window open — closes in {m}m {s.toString().padStart(2, "0")}s.
+      {appealable
+        ? `Appeal window open — closes in ${clock}.`
+        : `Settlement delay — settle unlocks in ${clock}.`}
     </span>
   );
 }
@@ -117,11 +128,14 @@ export default function ReportDetail() {
                 <dd>{formatDateTime(r.adjudicated_at)}</dd>
               </>
             ) : null}
-            {APPEALABLE.has(statusNum) ? (
+            {AWAITING_SETTLEMENT.has(statusNum) ? (
               <>
-                <dt>Appeal window</dt>
+                <dt>{APPEALABLE.has(statusNum) ? "Appeal window" : "Settlement"}</dt>
                 <dd>
-                  <AppealCountdown deadline={toNumber(r.appeal_deadline)} />
+                  <DeadlineCountdown
+                    deadline={toNumber(r.appeal_deadline)}
+                    appealable={APPEALABLE.has(statusNum)}
+                  />
                 </dd>
               </>
             ) : null}

@@ -56,7 +56,7 @@ export function statusLabel(status: unknown): { label: string; tone: BadgeTone }
     case 2:
       return { label: "Confirmed — appealable", tone: "danger" };
     case 3:
-      return { label: "Suspicious — appealable", tone: "warn" };
+      return { label: "Suspicious — awaiting settlement", tone: "warn" };
     case 4:
       return { label: "Cleared — appealable", tone: "ok" };
     case 5:
