@@ -91,6 +91,20 @@ class _Public:
         return func
 
 
+class _EVM:
+    @staticmethod
+    def contract_interface(interface_cls: type) -> type:
+        def __init__(self, address: Address | str) -> None:
+            self._address = Address(address)
+
+        def emit_transfer(self, *, value: int) -> None:
+            gl.transfers.append((self._address, int(value)))
+
+        interface_cls.__init__ = __init__
+        interface_cls.emit_transfer = emit_transfer
+        return interface_cls
+
+
 class Contract:
     """Base class for GenLayer Intelligent Contracts."""
 
@@ -217,6 +231,7 @@ class _GL:
     def __init__(self) -> None:
         self.Contract = Contract
         self.public = _Public()
+        self.evm = _EVM()
         self.message = _Message()
         self.nondet = _Nondet()
         self.vm = _VM()
@@ -243,10 +258,6 @@ class _GL:
 
     def advance_time(self, seconds: int) -> None:
         self.current_time += seconds
-
-    def transfer(self, to: Address | str, amount: int) -> None:
-        self.transfers.append((Address(to), amount))
-
 
 gl = _GL()
 
