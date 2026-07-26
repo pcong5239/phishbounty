@@ -41,6 +41,12 @@ def system():
     admin = Address("0x2222222222222222222222222222222222222222")
     hunter = Address("0x3333333333333333333333333333333333333333")
 
+    gl.contracts.clear()
+    gl.web_pages.clear()
+    gl.prompt_responses.clear()
+    gl.prompts_history.clear()
+    gl.transfers.clear()
+
     gl.message.sender_address = deployer
     gl.message.value = 0
     gl.set_time(1_000_000)
