@@ -95,7 +95,7 @@ class Contract(gl.Contract):
         brand_id = self.brand_count
 
         self.brand_name[brand_id] = s_name
-        self.brand_admin[brand_id] = gl.message.sender
+        self.brand_admin[brand_id] = gl.message.sender_address  # VERIFY-AT-STUDIO
         self.brand_domains[brand_id] = DynArray(norm_domains)
         self.brand_scope[brand_id] = scope_note
         self.brand_active[brand_id] = True
@@ -111,7 +111,7 @@ class Contract(gl.Contract):
     def update_scope(self, brand_id: u256, scope_note: str) -> None:
         if brand_id not in self.brand_name:
             raise ValueError("ERR_NOT_FOUND")
-        if gl.message.sender != self.brand_admin[brand_id]:
+        if gl.message.sender_address != self.brand_admin[brand_id]:  # VERIFY-AT-STUDIO
             raise ValueError("ERR_NOT_ADMIN")
         if len(scope_note) > 500:
             raise ValueError("ERR_SCOPE_LENGTH")
@@ -122,7 +122,7 @@ class Contract(gl.Contract):
     def set_active(self, brand_id: u256, active: bool) -> None:
         if brand_id not in self.brand_name:
             raise ValueError("ERR_NOT_FOUND")
-        if gl.message.sender != self.brand_admin[brand_id]:
+        if gl.message.sender_address != self.brand_admin[brand_id]:  # VERIFY-AT-STUDIO
             raise ValueError("ERR_NOT_ADMIN")
 
         self.brand_active[brand_id] = active

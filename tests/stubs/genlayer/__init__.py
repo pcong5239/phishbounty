@@ -69,16 +69,6 @@ class _Message:
         self.contract_address = Address("0x0000000000000000000000000000000000000000")
         self.value = 0
 
-    @property
-    def sender(self) -> Address:
-        return self.sender_address
-
-
-class _Block:
-    def __init__(self) -> None:
-        self.timestamp = 1_000_000
-
-
 class _PublicWrite:
     def __call__(self, func: Any) -> Any:
         func.__is_write__ = True
@@ -208,7 +198,6 @@ class _GL:
         self.Contract = Contract
         self.public = _Public()
         self.message = _Message()
-        self.block = _Block()
         self.nondet = _Nondet()
         self.vm = _VM()
         self.contracts: dict[Address, Any] = {}
@@ -216,6 +205,7 @@ class _GL:
         self.prompt_responses: list[str] = []
         self.prompts_history: list[str] = []
         self.transfers: list[tuple[Address, int]] = []
+        self.current_time = 1_000_000
 
     def get_contract_at(self, addr: Address | str) -> Any:
         a = Address(addr)
@@ -229,10 +219,10 @@ class _GL:
         self.contracts[a] = instance
 
     def set_time(self, ts: int) -> None:
-        self.block.timestamp = ts
+        self.current_time = ts
 
     def advance_time(self, seconds: int) -> None:
-        self.block.timestamp += seconds
+        self.current_time += seconds
 
     def transfer(self, to: Address | str, amount: int) -> None:
         self.transfers.append((Address(to), amount))

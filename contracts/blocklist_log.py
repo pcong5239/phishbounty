@@ -3,7 +3,12 @@
 
 """PhishBounty BlocklistLog"""
 
+import time
 from genlayer import *
+
+
+def _now() -> int:
+    return int(time.time())  # VERIFY-AT-STUDIO
 
 
 def _normalize_domain(raw: str) -> str:
@@ -69,14 +74,14 @@ class Contract(gl.Contract):
     hunter_neutralized: TreeMap[Address, u256]
 
     def __init__(self):
-        self.owner = gl.message.sender  # VERIFY-AT-STUDIO
+        self.owner = gl.message.sender_address  # VERIFY-AT-STUDIO
         self.writer = Address("0x0000000000000000000000000000000000000000")
         self.writer_set = False
         self.event_count = 0
 
     @gl.public.write
     def set_writer(self, writer: Address) -> None:
-        if gl.message.sender != self.owner:  # VERIFY-AT-STUDIO
+        if gl.message.sender_address != self.owner:  # VERIFY-AT-STUDIO
             raise ValueError("ERR_NOT_OWNER")
         if self.writer_set:
             raise ValueError("ERR_WRITER_SET")
@@ -85,7 +90,7 @@ class Contract(gl.Contract):
 
     @gl.public.write
     def append_event(self, domain: str, kind: u8, report_id: u256, hunter: Address) -> None:
-        if gl.message.sender != self.writer:  # VERIFY-AT-STUDIO
+        if gl.message.sender_address != self.writer:  # VERIFY-AT-STUDIO
             raise ValueError("ERR_NOT_WRITER")
         if kind not in (1, 2, 3):
             raise ValueError("ERR_KIND")
@@ -113,7 +118,7 @@ class Contract(gl.Contract):
         self.event_kind[eid] = kind
         self.event_report_id[eid] = report_id
         self.event_hunter[eid] = h_addr
-        self.event_at[eid] = gl.block.timestamp  # VERIFY-AT-STUDIO
+        self.event_at[eid] = _now()
 
         if domain not in self.domain_event_ids:
             self.domain_event_ids[domain] = DynArray()

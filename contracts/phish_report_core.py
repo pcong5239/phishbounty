@@ -4,6 +4,7 @@
 """PhishBounty PhishReportCore"""
 
 import json  # VERIFY-AT-STUDIO
+import time
 from genlayer import *
 
 MIN_STAKE_ABS = 500_000_000_000_000
@@ -336,13 +337,13 @@ class Contract(gl.Contract):
         self.report_count = 0
 
     def _sender(self) -> Address:
-        return gl.message.sender  # VERIFY-AT-STUDIO
+        return gl.message.sender_address  # VERIFY-AT-STUDIO
 
     def _value(self) -> int:
         return gl.message.value  # VERIFY-AT-STUDIO
 
     def _now(self) -> int:
-        return gl.block.timestamp  # VERIFY-AT-STUDIO
+        return int(time.time())  # VERIFY-AT-STUDIO
 
     def _registry(self):
         return gl.get_contract_at(self.registry_addr)  # VERIFY-AT-STUDIO

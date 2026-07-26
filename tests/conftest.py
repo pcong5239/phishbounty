@@ -11,10 +11,23 @@ if contracts_dir not in sys.path:
     sys.path.insert(0, contracts_dir)
 
 import pytest
+import blocklist_log as blocklist_log_module
+import phish_report_core as phish_report_core_module
 from blocklist_log import Contract as BlocklistLogContract
 from brand_registry import Contract as BrandRegistryContract
 from genlayer import Address, gl
 from phish_report_core import Contract as PhishReportCoreContract
+
+
+@pytest.fixture(autouse=True)
+def controllable_clock(monkeypatch):
+    monkeypatch.setattr(
+        blocklist_log_module.time, "time", lambda: gl.current_time
+    )
+    monkeypatch.setattr(
+        phish_report_core_module.time, "time", lambda: gl.current_time
+    )
+    gl.set_time(1_000_000)
 
 
 @pytest.fixture
