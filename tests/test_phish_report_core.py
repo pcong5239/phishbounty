@@ -30,6 +30,16 @@ def test_payable_enforcement(system):
     assert rid == 1
 
 
+def test_cross_contract_proxy_requires_explicit_access_mode(system):
+    raw_registry = gl.get_contract_at(system.reg_addr)
+    with pytest.raises(AttributeError, match=r"requires \.view\(\) or \.emit\(\)"):
+        raw_registry.get_brand(1)
+    with pytest.raises(AttributeError, match="cannot call non-view"):
+        raw_registry.view().register_brand("Brand Acme", "acme.com", "Scope")
+    with pytest.raises(AttributeError, match="cannot call non-write"):
+        raw_registry.emit().get_brand(1)
+
+
 def test_fund_pool(system):
     # Register brand with admin caller
     system.set_caller(system.admin)

@@ -95,6 +95,17 @@ def test_reverify_prompt_and_parser_strictness():
             parse_reverify_payload(raw)
 
 
+def test_parse_reverify_payload_accepts_dict_and_rejects_bad_dict_schema():
+    assert parse_reverify_payload(
+        {"state": "ACTIVE", "confidence": 90}
+    ) == {"state": "ACTIVE", "confidence": 90}
+
+    with pytest.raises(ValueError, match="ERR_PAYLOAD"):
+        parse_reverify_payload(
+            {"state": "ACTIVE", "confidence": 90, "unexpected": True}
+        )
+
+
 def test_reverify_rejects_unknown_and_cleared_domains(system):
     with pytest.raises(ValueError, match="ERR_NOT_BLOCKED"):
         system.core.reverify("unknown.com")
@@ -139,6 +150,21 @@ def test_benign_page_neutralizes_domain(system):
     system.core.reverify(DOMAIN)
     assert system.blocklist.get_domain_state(DOMAIN) == 2
     assert [event["kind"] for event in system.blocklist.get_domain_history(DOMAIN)] == [1, 2]
+
+
+def test_reverify_accepts_dict_responses_and_return_wrapped_leader(system):
+    _setup_blocked(system)
+    gl.advance_time(REVERIFY_COOLDOWN)
+    gl.web_pages[URL] = "A harmless parked page"
+    gl.prompt_responses = [
+        {"state": "BENIGN", "confidence": 92},
+        {"state": "BENIGN", "confidence": 80},
+    ]
+    gl.wrap_leader_result = True
+
+    system.core.reverify(DOMAIN)
+
+    assert system.blocklist.get_domain_state(DOMAIN) == 2
 
 
 def test_active_page_stays_blocked_without_new_event(system):
