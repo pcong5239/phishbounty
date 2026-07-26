@@ -406,6 +406,7 @@ def test_evidence_sufficient_false_undetermined_path(system):
 
     rep = system.core.get_report(rid)
     assert rep["status"] == 5  # STATUS_UNDETERMINED
+    assert rep["reason"] == "UNDETERMINED:INSUFFICIENT"
     assert rep["retry_count"] == 1
 
 

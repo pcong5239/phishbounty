@@ -554,15 +554,20 @@ class Contract(gl.Contract):
         if outcome in ("FETCH_FAIL", "BAD_PAYLOAD") or (
             outcome == "OK" and accepted_payload["evidence_sufficient"] is False
         ):
+            reason_tag = (
+                "INSUFFICIENT"
+                if outcome == "OK" and accepted_payload["evidence_sufficient"] is False
+                else outcome
+            )
             if ret == 0:
                 self.report_status[report_id] = STATUS_UNDETERMINED
                 self.report_retry[report_id] = 1
-                self.report_reason[report_id] = "UNDETERMINED:" + outcome
+                self.report_reason[report_id] = "UNDETERMINED:" + reason_tag
                 self.report_adjudicated_at[report_id] = now_ts
             elif ret == 1:
                 self.report_status[report_id] = STATUS_WITHDRAWN
                 self.report_adjudicated_at[report_id] = now_ts
-                self.report_reason[report_id] = "WITHDRAWN:" + outcome
+                self.report_reason[report_id] = "WITHDRAWN:" + reason_tag
                 hunter_addr = self.report_hunter[report_id]
                 stake_amt = self.report_stake[report_id]
                 self._transfer(hunter_addr, stake_amt)  # VERIFY-AT-STUDIO
