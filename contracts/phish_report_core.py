@@ -401,6 +401,35 @@ class Contract(gl.Contract):
 
         return rid
 
+    @gl.public.write.payable  # VERIFY-AT-STUDIO
+    def appeal(self, report_id: u256) -> None:
+        if report_id not in self.report_brand:
+            raise ValueError("ERR_NOT_FOUND")
+
+        status = self.report_status[report_id]
+        if status not in (STATUS_CONFIRMED, STATUS_CLEARED):
+            raise ValueError("ERR_NOT_APPEALABLE")
+
+        if self._now() >= self.report_appeal_deadline[report_id]:
+            raise ValueError("ERR_APPEAL_WINDOW")
+
+        caller = self._sender()
+        if status == STATUS_CONFIRMED:
+            brand_id = self.report_brand[report_id]
+            brand_info = self._registry().get_brand(brand_id)
+            if caller != Address(brand_info["admin"]):
+                raise ValueError("ERR_NOT_PARTY")
+        elif caller != self.report_hunter[report_id]:
+            raise ValueError("ERR_NOT_PARTY")
+
+        appeal_stake = 2 * self.report_stake[report_id]
+        if self._value() != appeal_stake:
+            raise ValueError("ERR_APPEAL_STAKE")
+
+        self.report_status[report_id] = STATUS_APPEALED
+        self.report_appellant[report_id] = caller
+        self.report_appeal_stake[report_id] = self._value()
+
     @gl.public.write
     def adjudicate(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
