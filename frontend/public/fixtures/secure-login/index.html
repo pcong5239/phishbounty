@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  PhishBounty test fixture — impersonation sample.
+  Deliberately mimics the FICTIONAL "Example Brand" (example.com is an IANA-reserved
+  documentation domain, not a real company) so validators have a stable, harmless
+  adjudication target. The form is inert: no action, no network calls, nothing is
+  collected or stored. Indexing is disabled.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Example Brand — Account Verification Required</title>
+    <style>
+      :root { font-family: Arial, Helvetica, sans-serif; }
+      body { margin: 0; background: #f2f4f7; color: #1a1a1a; }
+      header { background: #14315c; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 10px; }
+      .logo { width: 26px; height: 26px; background: #fff; color: #14315c; border-radius: 4px; display: grid; place-items: center; font-weight: 700; }
+      .brand { font-size: 18px; font-weight: 700; letter-spacing: .2px; }
+      main { max-width: 420px; margin: 40px auto; background: #fff; border: 1px solid #dbe0e6; border-radius: 6px; padding: 28px; }
+      h1 { font-size: 20px; margin: 0 0 6px; }
+      .alert { background: #fdecea; border-left: 4px solid #c62828; padding: 10px 12px; margin: 16px 0; font-size: 14px; }
+      label { display: block; font-size: 13px; margin: 14px 0 4px; }
+      input { width: 100%; padding: 9px 10px; border: 1px solid #c6ccd4; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+      button { margin-top: 18px; width: 100%; background: #14315c; color: #fff; border: 0; border-radius: 4px; padding: 11px; font-size: 15px; cursor: pointer; }
+      .fine { color: #6b7280; font-size: 12px; margin-top: 16px; }
+      footer { text-align: center; color: #6b7280; font-size: 12px; padding: 24px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="logo" aria-hidden="true">E</span>
+      <span class="brand">Example Brand</span>
+    </header>
+
+    <main>
+      <h1>Verify your account</h1>
+      <p>Sign in to restore full access to your Example Brand account.</p>
+
+      <div class="alert">
+        <strong>Urgent:</strong> unusual sign-in activity was detected. Your account will be
+        permanently suspended within 24 hours unless you confirm your identity now.
+      </div>
+
+      <form onsubmit="event.preventDefault();">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="text" autocomplete="off" />
+
+        <label for="password">Account password</label>
+        <input id="password" name="password" type="password" autocomplete="off" />
+
+        <label for="phrase">Wallet recovery phrase (required for verification)</label>
+        <input id="phrase" name="phrase" type="text" autocomplete="off" />
+
+        <button type="submit">Confirm identity now</button>
+      </form>
+
+      <p class="fine">
+        Official Example Brand security check. Do not share this link.
+      </p>
+    </main>
+
+    <footer>© Example Brand — Account Security Team</footer>
+  </body>
+</html>
