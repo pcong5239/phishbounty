@@ -854,7 +854,7 @@ class Contract(gl.Contract):
             elif v_int == VERDICT_CLEARED:
                 self.report_status[report_id] = STATUS_CLEARED
 
-    @gl.public.write
+    @gl.public.write  # VERIFY-AT-STUDIO
     def settle(self, report_id: u256) -> None:
         if report_id not in self.report_brand:
             raise ValueError("ERR_NOT_FOUND")
@@ -892,7 +892,7 @@ class Contract(gl.Contract):
             )
             self.report_status[report_id] = STATUS_FINAL_CLEARED
 
-    @gl.public.write
+    @gl.public.write  # VERIFY-AT-STUDIO
     def reverify(self, domain: str) -> None:
         try:
             norm_domain = _normalize_domain(domain)

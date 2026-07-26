@@ -219,3 +219,26 @@ def test_inconclusive_appeal_original_confirmed_stands(system):
     assert pool["balance"] == INITIAL_POOL - BOUNTY
     assert pool["reserved"] == 0
     assert system.blocklist.get_domain_state(DOMAIN) == 1
+
+
+def test_insufficient_hunter_appeal_original_cleared_stands_without_retry(system):
+    brand_id, report_id, stake = _setup_adjudicated(system, "CLEARED")
+    _appeal(system, report_id, stake, "CLEARED")
+    gl.transfers.clear()
+    insufficient = _verdict("SUSPICIOUS", evidence_sufficient=False)
+    gl.prompt_responses = [insufficient, insufficient]
+    system.set_caller(system.deployer)
+    system.core.adjudicate(report_id)
+
+    report = system.core.get_report(report_id)
+    pool = system.core.get_pool(brand_id)
+    stats = system.core.get_hunter_stats(system.hunter)
+    assert report["status"] == STATUS_FINAL_CLEARED
+    assert report["reason"] == "APPEAL_INCONCLUSIVE:INSUFFICIENT"
+    assert report["retry_count"] == 0
+    assert _paid_to(system.hunter) == 2 * stake
+    assert pool["balance"] == INITIAL_POOL + stake
+    assert pool["reserved"] == 0
+    assert stats["open"] == 0
+    assert stats["cleared"] == 1
+    assert system.blocklist.get_event_count() == 0
