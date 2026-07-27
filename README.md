@@ -44,7 +44,7 @@ yet been live-verified on this final deployment.
 ## The trust problem
 
 Declaring "this website is impersonating that brand" has real consequences — bounty money, a
-hunter's forfeited stake, and a domain's public reputation — and no single party should hold
+hunter's forfeited stake, and a domain's public reputation - and no single party should hold
 that decision. A brand deciding alone can suppress competitors and critics. A hunter deciding
 alone can farm bounties with false reports. A centralized anti-phishing service is one
 operator whose evidence gathering, model, and verdict nobody can verify.
@@ -58,23 +58,23 @@ The evidence lives only on the open web, and the judgment is inherently subjecti
 - Remove subjective AI judgment and "does page A impersonate brand B" collapses into string
   matching, which attackers evade trivially.
 - Remove validator consensus and a single renderer plus a single model becomes the trusted
-  decider — exactly the centralized service the protocol replaces.
+  decider - exactly the centralized service the protocol replaces.
 
 One property makes this unusual: **the evidence source is adversarial**. A phishing page can
 embed instructions aimed at the model reading it. Deterministic validator-side defenses are
-therefore a core feature, not a checklist item — see "Prompt-injection defenses" below.
+therefore a core feature, not a checklist item - see "Prompt-injection defenses" below.
 
 ## Architecture
 
 Three contracts, in `contracts/`:
 
-- **`brand_registry.py`** — deterministic registry of brands: name, official domains
+- **`brand_registry.py`** - deterministic registry of brands: name, official domains
   (normalized and globally unique), scope note, admin, active flag. Holds no funds.
-- **`phish_report_core.py`** — the intelligent core: bounty pools, hunter stakes, the report
+- **`phish_report_core.py`** - the intelligent core: bounty pools, hunter stakes, the report
   state machine, the non-deterministic adjudication, appeals, settlement, payouts, and
   domain re-verification. Reads the registry and writes the blocklist. Exposes native storage-root
   upgradability for its deployer.
-- **`blocklist_log.py`** — append-only event log (`LISTED` / `NEUTRALIZED` / `RELISTED`) with a
+- **`blocklist_log.py`** - append-only event log (`LISTED` / `NEUTRALIZED` / `RELISTED`) with a
   single authorized writer. Public views such as `is_blocked(domain)` make it consumable by
   other contracts and applications.
 
@@ -86,7 +86,7 @@ procedure independently and then compares the **semantic decision**, not the wor
 verdict must match exactly, confidence must agree within 20 points, and the
 evidence-sufficiency flag must match. Free-form reasoning is never compared byte for byte.
 
-Graduated outcomes — `CONFIRMED_PHISHING`, `SUSPICIOUS`, `CLEARED` — carry a confidence score,
+Graduated outcomes - `CONFIRMED_PHISHING`, `SUSPICIOUS`, `CLEARED` - carry a confidence score,
 a set of observed signal codes, and an actionable reason. Infrastructure failures (dead page,
 malformed model output) produce `UNDETERMINED` with one retry rather than a false verdict; a
 dead suspect page is never treated as exoneration.
