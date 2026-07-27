@@ -400,6 +400,17 @@ class Contract(gl.Contract):
         self.registry_addr = _coerce_address(registry_addr)
         self.blocklist_addr = _coerce_address(blocklist_addr)
         self.report_count = 0
+        root = gl.storage.Root.get()  # VERIFY-AT-STUDIO
+        root.upgraders.get().append(  # VERIFY-AT-STUDIO
+            gl.message.sender_address
+        )
+
+    @gl.public.write
+    def upgrade(self, new_code: bytes) -> None:
+        root = gl.storage.Root.get()  # VERIFY-AT-STUDIO
+        code = root.code.get()  # VERIFY-AT-STUDIO
+        code.truncate()  # VERIFY-AT-STUDIO
+        code.extend(new_code)  # VERIFY-AT-STUDIO
 
     def _sender(self) -> Address:
         return gl.message.sender_address  # VERIFY-AT-STUDIO

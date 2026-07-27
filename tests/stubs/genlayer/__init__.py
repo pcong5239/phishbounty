@@ -103,11 +103,75 @@ u64 = int
 u256 = int
 
 
+class _CodeBuffer:
+    def __init__(self, root: _StorageRoot) -> None:
+        self._root = root
+        self._content = bytearray()
+
+    def truncate(self) -> None:
+        self._check_upgrader()
+        self._content.clear()
+
+    def extend(self, new_bytes: bytes) -> None:
+        self._check_upgrader()
+        if not isinstance(new_bytes, (bytes, bytearray)):
+            raise TypeError("extend expects bytes")
+        self._content.extend(new_bytes)
+
+    def _check_upgrader(self) -> None:
+        current_sender = gl.message.sender_address
+        if current_sender not in self._root.upgraders_list:
+            raise UserError("ERR_NOT_UPGRADER")
+
+    def __bytes__(self) -> bytes:
+        return bytes(self._content)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (bytes, bytearray)):
+            return bytes(self._content) == bytes(other)
+        if isinstance(other, _CodeBuffer):
+            return bytes(self._content) == bytes(other._content)
+        return False
+
+    def __len__(self) -> int:
+        return len(self._content)
+
+
+class _StorageSlot:
+    def __init__(self, val: Any) -> None:
+        self._val = val
+
+    def get(self) -> Any:
+        return self._val
+
+
+class _StorageRoot:
+    def __init__(self) -> None:
+        self.upgraders_list = DynArray()
+        self.upgraders = _StorageSlot(self.upgraders_list)
+        self.code_buffer = _CodeBuffer(self)
+        self.code = _StorageSlot(self.code_buffer)
+
+
+class _RootAccess:
+    @staticmethod
+    def get() -> _StorageRoot:
+        if gl._active_root is None:
+            raise RuntimeError("No active contract storage root")
+        return gl._active_root
+
+
+class _Storage:
+    def __init__(self) -> None:
+        self.Root = _RootAccess
+
+
 class _Message:
     def __init__(self) -> None:
         self.sender_address = Address("0x0000000000000000000000000000000000000000")
         self.contract_address = Address("0x0000000000000000000000000000000000000000")
         self.value = 0
+
 
 class _PublicWrite:
     def __call__(self, func: Any) -> Any:
@@ -145,12 +209,26 @@ class _EVM:
         return interface_cls
 
 
-class Contract:
+class _ContractMeta(type):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        instance = cls.__new__(cls, *args, **kwargs)
+        previous_root = gl._active_root
+        gl._active_root = getattr(instance, "_storage_root", None)
+        try:
+            if isinstance(instance, cls):
+                instance.__init__(*args, **kwargs)
+        finally:
+            gl._active_root = previous_root
+        return instance
+
+
+class Contract(metaclass=_ContractMeta):
     """Base class for GenLayer Intelligent Contracts."""
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         instance = super().__new__(cls)
         instance.address = Address("0x0000000000000000000000000000000000000000")
+        instance._storage_root = _StorageRoot()
         for base in reversed(cls.__mro__):
             if hasattr(base, "__annotations__"):
                 for name, type_hint in base.__annotations__.items():
@@ -163,16 +241,20 @@ class Contract:
 
     def __getattribute__(self, name: str) -> Any:
         attr = super().__getattribute__(name)
-        if callable(attr) and hasattr(attr, "__is_write__"):
+        if callable(attr) and (hasattr(attr, "__is_write__") or hasattr(attr, "__is_view__")):
             def wrapper(*args: Any, **kwargs: Any) -> Any:
-                if not getattr(attr, "__is_payable__", False) and gl.message.value > 0:
-                    raise ValueError("ERR_NON_PAYABLE")
+                if hasattr(attr, "__is_write__"):
+                    if not getattr(attr, "__is_payable__", False) and gl.message.value > 0:
+                        raise ValueError("ERR_NON_PAYABLE")
                 previous_contract = gl.message.contract_address
+                previous_root = gl._active_root
                 gl.message.contract_address = self.address
+                gl._active_root = getattr(self, "_storage_root", None)
                 try:
                     return attr(*args, **kwargs)
                 finally:
                     gl.message.contract_address = previous_contract
+                    gl._active_root = previous_root
             return wrapper
         return attr
 
@@ -229,13 +311,16 @@ class _WriteProxy:
         def invoke(*args: Any, **kwargs: Any) -> Any:
             previous_sender = gl.message.sender_address
             previous_value = gl.message.value
+            previous_root = gl._active_root
             try:
                 gl.message.sender_address = self._sender
                 gl.message.value = self._value
+                gl._active_root = getattr(self._target, "_storage_root", None)
                 return attr(*args, **kwargs)
             finally:
                 gl.message.sender_address = previous_sender
                 gl.message.value = previous_value
+                gl._active_root = previous_root
 
         return invoke
 
@@ -284,6 +369,8 @@ class _GL:
         self.message = _Message()
         self.nondet = _Nondet()
         self.vm = _VM()
+        self.storage = _Storage()
+        self._active_root: _StorageRoot | None = None
         self.contracts: dict[Address, Any] = {}
         self.web_pages: dict[str, str | None] = {}
         self.prompt_responses: list[dict | str] = []
@@ -308,6 +395,7 @@ class _GL:
 
     def advance_time(self, seconds: int) -> None:
         self.current_time += seconds
+
 
 gl = _GL()
 
