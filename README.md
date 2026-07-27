@@ -107,15 +107,33 @@ phishbounty/
 
 ## Running the tests
 
+### Intelligent Contract test suite (85 tests)
+
 ```bash
 python -m pytest tests/ -q
 ```
 
-The suite covers the guard chain, the report state machine, payout and pool arithmetic, the
+The Python suite covers the guard chain, the report state machine, payout and pool arithmetic, the
 verdict-payload parser, validator acceptance and rejection, and the whole-GEN economics rules.
-It runs against a pure-Python GenVM stub written for this repository, which deliberately
+It runs locally against a pure-Python GenVM stub written for this repository, which deliberately
 mirrors real runtime semantics that unit tests would otherwise hide (for example, rejecting
 `Address(int)` and `DynArray(...)` construction).
+
+### Frontend execution gate test suite (11 tests)
+
+```bash
+cd frontend
+npm test
+```
+
+The frontend Node regression suite runs 11 tests covering the fail-closed transaction execution
+gate (`FINALIZED` plus `FINISHED_WITH_RETURN`), failed execution results, missing/unknown results,
+bigint receipt data, `ERR_*` error identifier extraction, and unserializable receipt data.
+
+Both suites run locally and do not send transactions to Studionet. The Python
+tests use the repository’s GenVM stub; the frontend tests exercise the real
+receipt helper with the `ExecutionResult` enum from `genlayer-js`. Live network
+state is checked separately with `frontend/scripts/verify-reads.mjs`.
 
 ## Running the frontend
 

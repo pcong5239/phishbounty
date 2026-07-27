@@ -99,7 +99,8 @@ class Contract(gl.Contract):
         self.brand_domains[brand_id] = norm_domains  # VERIFY-AT-STUDIO
         self.brand_scope[brand_id] = scope_note
         self.brand_active[brand_id] = True
-        # TODO: Wire block timestamp in Phase 3 when gl.message context is finalized
+        # TODO(next contract deployment): populate from transaction datetime.
+        # The current Studionet deployment exposes 0 for this field.
         self.brand_created_at[brand_id] = 0
 
         for dom in norm_domains:

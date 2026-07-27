@@ -1,5 +1,5 @@
-// Live Studionet dev deployment (smoke-verified 2026-07-27).
-// These are real working dev addresses; the release deployment replaces them in Phase 7.
+// Live Studionet development deployment (smoke-verified 2026-07-27).
+// Replace only after a later contract release is deployed and its addresses are verified.
 export const CHAIN = "studionet"; // RPC https://studio.genlayer.com/api, chainId 61999
 
 export const REGISTRY_ADDRESS = "0xe34C583C04ccfa33C44A69010a02EB1A85071EF2" as const;
