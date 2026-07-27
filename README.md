@@ -16,24 +16,30 @@ forfeits the hunter's stake to the pool.
 Development deployment on Studionet, wired to the live frontend. Studionet is a hosted
 development network, not a production network.
 
-Verified end-to-end on-chain so far: brand registration, pool funding, bounty configuration,
-report submission from a second wallet, non-deterministic adjudication reaching consensus,
-and settlement of a **cleared** report including stake slashing and pool accounting. The
-confirmed-verdict payout path, appeals, and re-verification are implemented and unit-tested
-but are still being exercised on-chain; this section is updated only against transactions that
-have actually finalized.
+The final Studionet deployment stack has been verified end-to-end on-chain for deployment with
+Studio integer address calldata, one-shot writer binding (`blocklist.set_writer(core)`), same-code
+native Core upgrade rehearsal, bounty configuration, pool funding, report submission from a second
+wallet, non-deterministic `CONFIRMED_PHISHING` adjudication reaching validator consensus,
+post-window settlement, 6 GEN payout child transfer to the hunter, and finalized Blocklist append
+child transaction. Appeals and re-verification remain fully implemented and unit-tested but have not
+yet been live-verified on this final deployment.
 
 ## Deployed contracts (Studionet)
 
 | Contract | Address |
 | --- | --- |
 | BrandRegistry | [`0xe34C583C04ccfa33C44A69010a02EB1A85071EF2`](https://explorer-studio.genlayer.com/address/0xe34C583C04ccfa33C44A69010a02EB1A85071EF2) |
-| BlocklistLog | [`0x8a50d35df4Fb0599d6613aa35286BcE56a46F05A`](https://explorer-studio.genlayer.com/address/0x8a50d35df4Fb0599d6613aa35286BcE56a46F05A) |
-| PhishReportCore | [`0x584890C0C49EA8dA61316b5512559063c0DE9c14`](https://explorer-studio.genlayer.com/address/0x584890C0C49EA8dA61316b5512559063c0DE9c14) |
+| BlocklistLog | [`0x1B7F3542fb002D35de92AC63890cbc5a45B7C9Eb`](https://explorer-studio.genlayer.com/address/0x1B7F3542fb002D35de92AC63890cbc5a45B7C9Eb) |
+| PhishReportCore | [`0x73eb224D4625aa5479e209C73A879E1AF0114AB0`](https://explorer-studio.genlayer.com/address/0x73eb224D4625aa5479e209C73A879E1AF0114AB0) |
 
-Reference adjudication transaction (report #1, verdict `CLEARED`, finalized with a leader
-rotation after validators rejected the first leader's proposal):
-[`0xc72aac9f0ebb5dc95d54b3ceb9588eb0ae722233805a4763718e7ca86f8763e4`](https://explorer-studio.genlayer.com/tx/0xc72aac9f0ebb5dc95d54b3ceb9588eb0ae722233805a4763718e7ca86f8763e4)
+### Live-verified transaction evidence
+
+- **PhishReportCore deployment:** [`0x9b653b9cdad03ba41bef466c527632f982ff962721a4380e6dbcc23d94909fda`](https://explorer-studio.genlayer.com/tx/0x9b653b9cdad03ba41bef466c527632f982ff962721a4380e6dbcc23d94909fda)
+- **Same-code upgrade rehearsal:** [`0x0d1fb941729a56e8ed1517c11c9b992cbd51015cdc50d7c55e5301ca2f8c63ed`](https://explorer-studio.genlayer.com/tx/0x0d1fb941729a56e8ed1517c11c9b992cbd51015cdc50d7c55e5301ca2f8c63ed)
+- **Confirmed adjudication (report #1):** [`0xfd5f5a75171130d4066d4ee39bee91c417bb8ca736d4eb269244c5eb6af11355`](https://explorer-studio.genlayer.com/tx/0xfd5f5a75171130d4066d4ee39bee91c417bb8ca736d4eb269244c5eb6af11355)
+- **Settlement:** [`0x3cd452c1344d6b6ed96d0eb30005873f3975b56df22eeeaae402203a39b49284`](https://explorer-studio.genlayer.com/tx/0x3cd452c1344d6b6ed96d0eb30005873f3975b56df22eeeaae402203a39b49284)
+- **Payout child transfer (6 GEN to hunter):** [`0x394af6690be040db2249b6ce0d743f34677d72adba9f803d5fbbc3f53843c12f`](https://explorer-studio.genlayer.com/tx/0x394af6690be040db2249b6ce0d743f34677d72adba9f803d5fbbc3f53843c12f)
+- **Blocklist append child transaction:** [`0xeea185fcee084329441e940e84b5441823b0f808504c88ecf0c5f8ea65502d8b`](https://explorer-studio.genlayer.com/tx/0xeea185fcee084329441e940e84b5441823b0f808504c88ecf0c5f8ea65502d8b)
 
 ## The trust problem
 
@@ -66,7 +72,8 @@ Three contracts, in `contracts/`:
   (normalized and globally unique), scope note, admin, active flag. Holds no funds.
 - **`phish_report_core.py`** — the intelligent core: bounty pools, hunter stakes, the report
   state machine, the non-deterministic adjudication, appeals, settlement, payouts, and
-  domain re-verification. Reads the registry and writes the blocklist.
+  domain re-verification. Reads the registry and writes the blocklist. Exposes native storage-root
+  upgradability for its deployer.
 - **`blocklist_log.py`** — append-only event log (`LISTED` / `NEUTRALIZED` / `RELISTED`) with a
   single authorized writer. Public views such as `is_blocked(domain)` make it consumable by
   other contracts and applications.
@@ -107,15 +114,15 @@ phishbounty/
 
 ## Running the tests
 
-### Intelligent Contract test suite (85 tests)
+### Intelligent Contract test suite (90 tests)
 
 ```bash
 python -m pytest tests/ -q
 ```
 
 The Python suite covers the guard chain, the report state machine, payout and pool arithmetic, the
-verdict-payload parser, validator acceptance and rejection, and the whole-GEN economics rules.
-It runs locally against a pure-Python GenVM stub written for this repository, which deliberately
+verdict-payload parser, validator acceptance and rejection, whole-GEN economics rules, and native storage-root
+upgradability. It runs locally against a pure-Python GenVM stub written for this repository, which deliberately
 mirrors real runtime semantics that unit tests would otherwise hide (for example, rejecting
 `Address(int)` and `DynArray(...)` construction).
 
@@ -203,6 +210,10 @@ served with `X-Robots-Tag: noindex`.
   accepted decision space but do not replace semantic consensus.
 - Only `PhishReportCore` may append to `BlocklistLog`. The frontend cannot manufacture a
   verdict or blocklist event.
+- `PhishReportCore` registers its deployer as a native storage-root upgrader and exposes a deployer-authorized
+  `upgrade(new_code: bytes)` method. This preserves the contract address and state while giving the deployer code
+  upgrade authority. `BlocklistLog` and `BrandRegistry` are non-upgradeable deterministic contracts.
+- Appeals and re-verification remain unit-tested but are not yet live-verified on this deployment.
 - Users sign write transactions in their own wallet. The UI treats a write as complete only
   after `FINALIZED` plus a successful execution result.
 - The published addresses are Studionet development deployments. They are evidence of the
