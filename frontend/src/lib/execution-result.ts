@@ -25,7 +25,17 @@ export function executionFailure(
 }
 
 function readableError(receipt: Record<string, unknown>): string {
-  const raw = JSON.stringify(receipt);
+  let raw: string;
+
+  try {
+    raw =
+      JSON.stringify(receipt, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ) ?? "";
+  } catch {
+    return "Transaction finalized but execution failed.";
+  }
+
   const match = raw.match(/ERR_[A-Z_0-9]+/);
   if (match) return `Contract rejected the call: ${match[0]}`;
   return "Transaction finalized but execution failed.";

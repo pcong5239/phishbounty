@@ -86,3 +86,40 @@ test("regression - rejects finalized receipt with FINISHED_WITH_ERROR", () => {
   assert.notEqual(failure, null);
   assert.equal(typeof failure, "string");
 });
+
+test("executionFailure - bigint receipt with ERR code", () => {
+  const receipt = {
+    status: "FINALIZED",
+    txExecutionResultName: ExecutionResult.FINISHED_WITH_ERROR,
+    gaslimit: 1n,
+    error: "Execution reverted with ERR_SELF_REPORT",
+  };
+  assert.equal(
+    executionFailure(receipt),
+    "Contract rejected the call: ERR_SELF_REPORT",
+  );
+});
+
+test("executionFailure - bigint receipt without ERR code", () => {
+  const receipt = {
+    status: "FINALIZED",
+    txExecutionResultName: ExecutionResult.FINISHED_WITH_ERROR,
+    gaslimit: 1n,
+  };
+  assert.equal(
+    executionFailure(receipt),
+    "Transaction finalized but execution failed.",
+  );
+});
+
+test("executionFailure - unserializable circular receipt", () => {
+  const receipt: Record<string, unknown> = {
+    status: "FINALIZED",
+    txExecutionResultName: ExecutionResult.FINISHED_WITH_ERROR,
+  };
+  receipt.self = receipt;
+  assert.equal(
+    executionFailure(receipt),
+    "Transaction finalized but execution failed.",
+  );
+});
