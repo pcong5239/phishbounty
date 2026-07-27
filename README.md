@@ -99,7 +99,6 @@ so a page claiming to be the official site cannot change what it is compared aga
 phishbounty/
 ├── contracts/            # the three Intelligent Contracts
 ├── tests/                # pytest suite + a hand-written GenVM runtime stub
-├── docs/SPEC.md          # full technical specification
 ├── scripts/              # diagnostic tooling (Studio value-scale probe)
 └── frontend/             # React + TypeScript dApp (genlayer-js)
     ├── src/
@@ -124,18 +123,32 @@ mirrors real runtime semantics that unit tests would otherwise hide (for example
 cd frontend
 npm install
 npm run dev      # http://localhost:5173
+npm run build
 ```
 
 Reads work without a wallet. Writes require MetaMask on Studionet. The interface advances
 only after a transaction is finalized **and** its execution result is success, and it shows
 the consensus stage rather than an open-ended spinner.
 
+## Production deployment
+
+The Vite application is deployed from `frontend/`. Its Vercel configuration preserves
+client-side routes on refresh while excluding `/fixtures/*` from the SPA rewrite so the
+adjudication targets remain real HTML documents.
+
+```bash
+cd frontend
+npm install
+npm run build
+vercel --prod
+```
+
 ## Economics
 
 All payable amounts are whole GEN, because the Studio interface accepts only whole-GEN
 integers while the runtime delivers value in wei. A first pool deposit is at least 5 GEN;
 bounties run 5–500 GEN in multiples of 5, which keeps the hunter stake (bounty ÷ 5) and the
-appeal stake (2× stake) whole. See [docs/SPEC.md](docs/SPEC.md) §11.
+appeal stake (2× stake) whole.
 
 ## Test fixtures
 
@@ -145,7 +158,34 @@ Brand"**, a fictional company on `example.com` — an IANA-reserved documentatio
 real business. Its form is inert, it issues no network requests, it stores nothing, and it is
 served with `X-Robots-Tag: noindex`.
 
-## Documentation
+## Transaction lifecycle
 
-[docs/SPEC.md](docs/SPEC.md) holds the domain model, storage layout, state machine, consensus
-strategy, edge cases, economics, and deployment plan.
+1. A brand registers its official domains, funds its pool, and selects a bounty.
+2. A hunter submits a suspect URL with the exact required stake. Deterministic guards reject
+   official domains, unsafe URL forms, duplicate reports, self-reporting, and underfunded
+   pools before any model is called.
+3. Anyone may trigger adjudication. Validators independently render both pages and compare
+   the semantic verdict; the accepted result records confidence, signals, reasoning, and a
+   settlement deadline.
+4. A brand admin may appeal a confirmed verdict, or the hunter may appeal a cleared verdict,
+   during the appeal window by posting twice the original stake.
+5. After the deadline, settlement either pays a confirmed bounty and writes the blocklist,
+   returns a suspicious report's stake without a blocklist entry, or moves a cleared report's
+   slashed stake into the brand pool.
+6. Anyone may later re-verify a listed domain. A page that is gone or no longer impersonates
+   the brand produces a `NEUTRALIZED` event.
+
+## Trust boundaries
+
+- Registered brand state is the source of truth for brand identity; page content cannot
+  redefine the official domain or administrator.
+- Suspect and official pages are untrusted external evidence. Fetch or model failures do not
+  become false exonerations; they enter the bounded `UNDETERMINED` retry path.
+- Validators independently repeat the evaluation. Deterministic payload checks narrow the
+  accepted decision space but do not replace semantic consensus.
+- Only `PhishReportCore` may append to `BlocklistLog`. The frontend cannot manufacture a
+  verdict or blocklist event.
+- Users sign write transactions in their own wallet. The UI treats a write as complete only
+  after `FINALIZED` plus a successful execution result.
+- The published addresses are Studionet development deployments. They are evidence of the
+  current build, not a production-security guarantee.
