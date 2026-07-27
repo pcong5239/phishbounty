@@ -418,7 +418,7 @@ class Contract(gl.Contract):
         return blocklist.view().get_domain_state(domain)  # VERIFY-AT-STUDIO
 
     def _transfer(self, to: Address, amount: u256) -> None:
-        _Recipient(Address(to)).emit_transfer(value=u256(amount))  # VERIFY-AT-STUDIO
+        _Recipient(to).emit_transfer(value=u256(amount))  # VERIFY-AT-STUDIO
 
     def _blocklist_last_event_at(self, domain: str) -> int:
         blocklist = gl.get_contract_at(self.blocklist_addr)  # VERIFY-AT-STUDIO

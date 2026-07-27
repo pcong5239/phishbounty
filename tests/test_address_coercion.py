@@ -152,3 +152,10 @@ def test_all_changed_public_boundaries_reject_malformed_address():
 def test_stub_address_rejects_plain_integer():
     with pytest.raises((TypeError, OverflowError)):
         Address(int(REGISTRY_HEX, 16))
+
+
+def test_stub_address_rejects_already_coerced_address():
+    address = Address("0x0000000000000000000000000000000000000001")
+
+    with pytest.raises(TypeError, match="cannot convert 'Address' object to bytes"):
+        Address(address)

@@ -28,6 +28,8 @@ class Address(bytes):
     def __new__(cls, value: str | bytes):
         if isinstance(value, int):
             raise OverflowError("cannot fit 'int' into an index-sized integer")
+        if isinstance(value, Address):
+            raise TypeError("cannot convert 'Address' object to bytes")
         if isinstance(value, str):
             normalized = value.lower().strip()
             if len(normalized) != 42 or not normalized.startswith("0x"):
@@ -39,7 +41,7 @@ class Address(bytes):
             if len(raw) != 20:
                 raise ValueError("Address string must contain 20 hex bytes")
             return super().__new__(cls, raw)
-        if isinstance(value, (bytes, Address)):
+        if isinstance(value, bytes):
             raw = bytes(value)
             if len(raw) != 20:
                 raise ValueError("Address bytes must be exactly 20 bytes")
