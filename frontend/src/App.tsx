@@ -7,6 +7,7 @@ import ReportDetail from "./pages/ReportDetail";
 import Blocklist from "./pages/Blocklist";
 import Hunters from "./pages/Hunters";
 import Hunt from "./pages/Hunt";
+import NotFound from "./pages/NotFound";
 import { WalletBar } from "./components/WalletBar";
 
 const NAV = [
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/reports/:id" element={<ReportDetail />} />
           <Route path="/blocklist" element={<Blocklist />} />
           <Route path="/hunters" element={<Hunters />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </div>
