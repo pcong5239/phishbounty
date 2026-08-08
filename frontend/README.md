@@ -13,9 +13,10 @@ npm run dev
 npm test
 ```
 
-Runs 20 regression tests: 11 for fail-closed transaction execution result handling, two
+Runs 25 regression tests: 13 for fail-closed transaction execution result handling, two
 for the wallet-signed brand onboarding call sequence and input bounds, and seven for
-multi-provider wallet discovery, dialog focus wrapping, and Studionet switching.
+multi-provider wallet discovery, dialog focus wrapping, and Studionet switching. Three finality
+tests cover terminal statuses, one shared deadline, and fail-safe progress errors.
 
 ## Production build
 

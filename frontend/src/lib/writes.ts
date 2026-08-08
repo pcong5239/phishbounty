@@ -1,5 +1,10 @@
-import { TransactionStatus } from "genlayer-js/types";
 import { executionFailure } from "./execution-result";
+import {
+  finalityDeadline,
+  waitForConsensusReceipt,
+  waitForFinalizedReceipt,
+  withReportedFailure,
+} from "./transaction-finality";
 import { writeClient } from "./wallet";
 import type { WalletProvider } from "./wallet-providers";
 
@@ -9,7 +14,7 @@ export type TxStage =
   | "idle"
   | "signing"
   | "pending"
-  | "consensus"
+  | "finalizing"
   | "success"
   | "error";
 
@@ -34,34 +39,43 @@ export async function sendWrite(
   onProgress: (p: TxProgress) => void,
 ): Promise<{ hash: string }> {
   const client = writeClient(account, provider);
+  let hash: string | undefined;
 
-  onProgress({ stage: "signing", message: "Waiting for wallet signature…" });
-  const hash = (await client.writeContract({
-    address: address as Hex,
-    functionName,
-    args: args as never[],
-    value,
-  })) as unknown as string;
+  return withReportedFailure(async () => {
+    onProgress({ stage: "signing", message: "Waiting for wallet signature…" });
+    hash = (await client.writeContract({
+      address: address as Hex,
+      functionName,
+      args: args as never[],
+      value,
+    })) as unknown as string;
 
-  onProgress({
-    stage: "pending",
-    hash,
-    message: "Transaction submitted. Validators are proposing and voting…",
+    onProgress({
+      stage: "pending",
+      hash,
+      message: "Transaction submitted. Validators are proposing and voting…",
+    });
+
+    const deadline = finalityDeadline();
+    await waitForConsensusReceipt(client, hash, deadline);
+    onProgress({
+      stage: "finalizing",
+      hash,
+      message: "Consensus reached. Waiting for transaction finality…",
+    });
+
+    const receipt = (await waitForFinalizedReceipt(
+      client,
+      hash,
+      deadline,
+    )) as Record<string, unknown>;
+
+    const failure = executionFailure(receipt);
+    if (failure) throw new Error(failure);
+
+    onProgress({ stage: "success", hash, message: "Finalized and executed successfully." });
+    return { hash };
+  }, (message) => {
+    onProgress({ stage: "error", hash, message });
   });
-
-  const receipt = (await client.waitForTransactionReceipt({
-    hash: hash as never,
-    status: TransactionStatus.FINALIZED,
-  })) as unknown as Record<string, unknown>;
-
-  onProgress({ stage: "consensus", hash, message: "Finalized. Verifying execution result…" });
-
-  const failure = executionFailure(receipt);
-  if (failure) {
-    onProgress({ stage: "error", hash, message: failure });
-    throw new Error(failure);
-  }
-
-  onProgress({ stage: "success", hash, message: "Finalized and executed successfully." });
-  return { hash };
 }

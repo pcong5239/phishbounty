@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useRead } from "../lib/useRead";
 import { readContract } from "../lib/client";
 import { getBrand, getPool, listNewestFirst } from "../lib/queries";
@@ -26,6 +27,7 @@ function urlProblem(raw: string): string | null {
 }
 
 export default function Hunt() {
+  const navigate = useNavigate();
   const [brandId, setBrandId] = useState<number | null>(null);
   const [url, setUrl] = useState("");
   const [touched, setTouched] = useState(false);
@@ -140,9 +142,7 @@ export default function Hunt() {
                     : undefined
               }
               onDone={() => {
-                setUrl("");
-                setTouched(false);
-                pool.retry();
+                navigate("/reports");
               }}
             />
           ) : null}

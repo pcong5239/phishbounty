@@ -52,6 +52,52 @@ test("executionFailure - E. Missing txExecutionResultName returns a non-null fai
   assert.equal(typeof result, "string");
 });
 
+test("captured Studionet success shape accepts the successful leader", () => {
+  const receipt = {
+    status: 7,
+    status_name: "FINALIZED",
+    result: 6,
+    result_name: "MAJORITY_AGREE",
+    consensus_data: {
+      leader_receipt: [
+        {
+          mode: "leader",
+          execution_result: "SUCCESS",
+          result: { status: "return", payload: { readable: "null" } },
+        },
+        {
+          mode: "validator",
+          vote: "idle",
+          execution_result: "ERROR",
+          result: { status: "contract_error", payload: "idle" },
+          genvm_result: { error_code: "CONSENSUS_VALIDATOR_QUORUM_REACHED" },
+        },
+      ],
+    },
+  };
+  assert.equal(executionFailure(receipt), null);
+});
+
+test("captured Studionet contract-error shape remains fail-closed", () => {
+  const receipt = {
+    status: 7,
+    status_name: "FINALIZED",
+    result: 6,
+    result_name: "MAJORITY_AGREE",
+    consensus_data: {
+      leader_receipt: [
+        {
+          mode: "leader",
+          execution_result: "ERROR",
+          result: { status: "contract_error", payload: "ERR_SELF_REPORT" },
+          genvm_result: { error_code: "USER_ERROR" },
+        },
+      ],
+    },
+  };
+  assert.equal(executionFailure(receipt), "Contract rejected the call: ERR_SELF_REPORT");
+});
+
 test("executionFailure - F. Unknown string returns a non-null failure", () => {
   const receipt = {
     status: "FINALIZED",

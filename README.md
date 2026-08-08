@@ -126,19 +126,21 @@ upgradability. It runs locally against a pure-Python GenVM stub written for this
 mirrors real runtime semantics that unit tests would otherwise hide (for example, rejecting
 `Address(int)` and `DynArray(...)` construction).
 
-### Frontend transaction, onboarding, and wallet test suite (20 tests)
+### Frontend transaction, onboarding, and wallet test suite (25 tests)
 
 ```bash
 cd frontend
 npm test
 ```
 
-The frontend Node regression suite runs 11 tests covering the fail-closed transaction execution
-gate (`FINALIZED` plus `FINISHED_WITH_RETURN`), failed execution results, missing/unknown results,
+The frontend Node regression suite runs 13 tests covering the fail-closed transaction execution
+gate across both supported receipt shapes, failed execution results, missing/unknown results,
 bigint receipt data, `ERR_*` error identifier extraction, and unserializable receipt data. Two
 focused onboarding tests exercise the same write-intent builders used by the submitted client for
 `register_brand`, pool funding, bounty configuration, and report submission, plus the registration
-input bounds. Seven wallet tests pin multi-provider discovery, dialog focus wrapping, and Studionet switching behavior.
+input bounds. Seven wallet tests pin multi-provider discovery, dialog focus wrapping, and Studionet
+switching behavior. Three finality tests cover terminal statuses, one shared 30-minute deadline,
+and failures that cannot leave the UI busy forever.
 
 Both suites run locally and do not send transactions to Studionet. The Python
 tests use the repository’s GenVM stub; the frontend tests exercise the real

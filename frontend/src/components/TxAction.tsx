@@ -7,7 +7,7 @@ import type { TxProgress } from "../lib/writes";
 const STAGE_COPY: Record<string, string> = {
   signing: "1 of 3 · Awaiting wallet signature",
   pending: "2 of 3 · Validators proposing and voting",
-  consensus: "3 of 3 · Finalized — verifying execution result",
+  finalizing: "3 of 3 · Consensus reached — awaiting finality",
 };
 
 /**
@@ -41,7 +41,7 @@ export function TxAction({
   const busy =
     progress.stage === "signing" ||
     progress.stage === "pending" ||
-    progress.stage === "consensus";
+    progress.stage === "finalizing";
 
   async function run() {
     if (!account || !provider) {
