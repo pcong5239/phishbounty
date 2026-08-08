@@ -5,10 +5,8 @@ import { getBrand, getPool } from "../lib/queries";
 import { Badge, ErrorBox, Skeleton } from "../components/ui";
 import { TxAction } from "../components/TxAction";
 import { useWallet } from "../lib/wallet";
-import { CORE_ADDRESS } from "../config/contracts";
 import { shortAddress, toBigInt, weiToGen } from "../lib/format";
-
-const GEN = 10n ** 18n;
+import { fundPoolIntent, setBountyIntent } from "../lib/brand-onboarding";
 
 export default function BrandDetail() {
   const { id } = useParams();
@@ -26,6 +24,8 @@ export default function BrandDetail() {
   const b = brand.data;
   const isAdmin =
     account !== null && String(b.admin).toLowerCase() === String(account).toLowerCase();
+  const funding = fundPoolIntent(brandId, BigInt(fundAmount || "0"));
+  const bounty = setBountyIntent(brandId, BigInt(bountyAmount || "0"));
 
   return (
     <>
@@ -112,10 +112,10 @@ export default function BrandDetail() {
             </div>
             <TxAction
               label={`Fund ${fundAmount || "0"} GEN`}
-              address={CORE_ADDRESS}
-              functionName="fund_pool"
-              args={[brandId]}
-              value={BigInt(fundAmount || "0") * GEN}
+              address={funding.address}
+              functionName={funding.functionName}
+              args={funding.args}
+              value={funding.value}
               disabled={!fundAmount || BigInt(fundAmount || "0") === 0n}
               disabledReason="Enter a whole GEN amount"
               onDone={pool.retry}
@@ -136,9 +136,10 @@ export default function BrandDetail() {
             </div>
             <TxAction
               label={`Set bounty to ${bountyAmount || "0"} GEN`}
-              address={CORE_ADDRESS}
-              functionName="set_bounty"
-              args={[brandId, (BigInt(bountyAmount || "0") * GEN).toString()]}
+              address={bounty.address}
+              functionName={bounty.functionName}
+              args={bounty.args}
+              value={bounty.value}
               disabled={
                 !bountyAmount ||
                 BigInt(bountyAmount || "0") % 5n !== 0n ||

@@ -126,7 +126,7 @@ upgradability. It runs locally against a pure-Python GenVM stub written for this
 mirrors real runtime semantics that unit tests would otherwise hide (for example, rejecting
 `Address(int)` and `DynArray(...)` construction).
 
-### Frontend execution gate test suite (11 tests)
+### Frontend transaction and onboarding test suite (13 tests)
 
 ```bash
 cd frontend
@@ -135,7 +135,10 @@ npm test
 
 The frontend Node regression suite runs 11 tests covering the fail-closed transaction execution
 gate (`FINALIZED` plus `FINISHED_WITH_RETURN`), failed execution results, missing/unknown results,
-bigint receipt data, `ERR_*` error identifier extraction, and unserializable receipt data.
+bigint receipt data, `ERR_*` error identifier extraction, and unserializable receipt data. Two
+focused onboarding tests exercise the same write-intent builders used by the submitted client for
+`register_brand`, pool funding, bounty configuration, and report submission, plus the registration
+input bounds.
 
 Both suites run locally and do not send transactions to Studionet. The Python
 tests use the repository’s GenVM stub; the frontend tests exercise the real
@@ -154,6 +157,10 @@ npm run build
 Reads work without a wallet. Writes require MetaMask on Studionet. The interface advances
 only after a transaction is finalized **and** its execution result is success, and it shows
 the consensus stage rather than an open-ended spinner.
+
+On the Brands page, a connected wallet can register a brand and become its on-chain admin. The
+finalized registration refreshes the real brand list; the admin can then open that brand to fund
+its pool and set a bounty before a different wallet files a report.
 
 ## Production deployment
 

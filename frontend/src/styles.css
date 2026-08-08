@@ -282,7 +282,8 @@ button.primary {
 }
 
 input[type="text"],
-input[type="search"] {
+input[type="search"],
+textarea {
   font: inherit;
   padding: 6px 10px;
   border: 1px solid var(--border);

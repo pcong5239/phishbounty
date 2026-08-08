@@ -3,10 +3,11 @@ import { useRead } from "../lib/useRead";
 import { readContract } from "../lib/client";
 import { getBrand, getPool, listNewestFirst } from "../lib/queries";
 import type { Rec } from "../lib/queries";
-import { CORE_ADDRESS, REGISTRY_ADDRESS } from "../config/contracts";
+import { REGISTRY_ADDRESS } from "../config/contracts";
 import { Empty, ErrorBox, Skeleton } from "../components/ui";
 import { TxAction } from "../components/TxAction";
 import { toBigInt, toNumber, weiToGen } from "../lib/format";
+import { submitReportIntent } from "../lib/brand-onboarding";
 
 /** Mirrors the contract's submit_report URL guards so users fail fast, client-side. */
 function urlProblem(raw: string): string | null {
@@ -45,6 +46,7 @@ export default function Hunt() {
   const funded = pool.data ? toBigInt((pool.data as Rec).balance) - toBigInt((pool.data as Rec).reserved) : 0n;
   const bounty = pool.data ? toBigInt((pool.data as Rec).bounty_amount) : 0n;
   const poolReady = bounty > 0n && funded >= bounty;
+  const submission = submitReportIntent(brandId ?? 0, url.trim(), stake);
 
   return (
     <>
@@ -125,10 +127,10 @@ export default function Hunt() {
           {brandId !== null ? (
             <TxAction
               label={stake > 0n ? `Stake ${weiToGen(stake)} and submit` : "Submit report"}
-              address={CORE_ADDRESS}
-              functionName="submit_report"
-              args={[brandId, url.trim()]}
-              value={stake}
+              address={submission.address}
+              functionName={submission.functionName}
+              args={submission.args}
+              value={submission.value}
               disabled={Boolean(problem) || !poolReady || stake === 0n}
               disabledReason={
                 problem

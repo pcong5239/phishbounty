@@ -69,12 +69,12 @@ export function TxAction({
           {busy ? "Working…" : account ? label : "Connect wallet to continue"}
         </button>
         {!hasProvider ? (
-          <span className="tile-label" style={{ marginLeft: 8 }}>
+          <span className="tile-label" style={{ display: "block", marginTop: 8 }}>
             MetaMask required
           </span>
         ) : null}
         {disabled && disabledReason ? (
-          <span className="tile-label" style={{ marginLeft: 8 }}>
+          <span className="tile-label" style={{ display: "block", marginTop: 4 }}>
             {disabledReason}
           </span>
         ) : null}

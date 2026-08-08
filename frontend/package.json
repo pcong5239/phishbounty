@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test tests/execution-result.test.ts"
+    "test": "node --experimental-strip-types --test tests/execution-result.test.ts tests/brand-onboarding.test.ts"
   },
   "dependencies": {
     "genlayer-js": "^1.1.8",

@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "useDefineForClassFields": true,
     "noEmit": true
   },
