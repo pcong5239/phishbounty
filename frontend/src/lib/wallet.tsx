@@ -2,19 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
-import { CHAIN } from "../config/contracts";
+import type { Eip6963ProviderDetail, WalletOption, WalletProvider } from "./wallet-providers";
+import { legacyWallet, switchToStudionet, upsertWallet } from "./wallet-providers";
 
 type Hex = `0x${string}`;
 
-interface Eip1193Provider {
-  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
-  on?(event: string, handler: (...args: unknown[]) => void): void;
-  removeListener?(event: string, handler: (...args: unknown[]) => void): void;
-}
-
 declare global {
   interface Window {
-    ethereum?: Eip1193Provider;
+    ethereum?: WalletProvider;
   }
 }
 
@@ -23,7 +18,13 @@ interface WalletState {
   connecting: boolean;
   error: string | null;
   hasProvider: boolean;
-  connect: () => Promise<void>;
+  provider: WalletProvider | null;
+  wallets: WalletOption[];
+  selectedWalletName: string | null;
+  chooserOpen: boolean;
+  openChooser: () => void;
+  closeChooser: () => void;
+  chooseWallet: (uuid: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -33,36 +34,78 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<Hex | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasProvider = typeof window !== "undefined" && Boolean(window.ethereum);
+  const [provider, setProvider] = useState<WalletProvider | null>(null);
+  const [wallets, setWallets] = useState<WalletOption[]>([]);
+  const [selectedWalletName, setSelectedWalletName] = useState<string | null>(null);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const hasProvider = wallets.length > 0;
 
-  const connect = useCallback(async () => {
-    if (!window.ethereum) {
-      setError("No wallet extension detected. Install MetaMask to submit transactions.");
+  const chooseWallet = useCallback(async (uuid: string) => {
+    const selected = wallets.find((wallet) => wallet.info.uuid === uuid);
+    if (!selected) {
+      setError("The selected wallet is no longer available.");
       return;
     }
     setConnecting(true);
     setError(null);
     try {
-      const accounts = (await window.ethereum.request({
+      const accounts = (await selected.provider.request({
         method: "eth_requestAccounts",
       })) as string[];
       const first = accounts?.[0];
       if (!first) throw new Error("Wallet returned no accounts.");
-      // Ask genlayer-js to switch/add the target network before any write.
-      const client = createClient({ chain: studionet, account: first as Hex });
-      await client.connect(CHAIN);
+
+      await switchToStudionet(selected.provider);
+      setProvider(selected.provider);
+      setSelectedWalletName(selected.info.name);
       setAddress(first as Hex);
+      setChooserOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setConnecting(false);
     }
+  }, [wallets]);
+
+  const openChooser = useCallback(() => {
+    setError(null);
+    setChooserOpen(true);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+  }, []);
+  const closeChooser = useCallback(() => setChooserOpen(false), []);
+  const disconnect = useCallback(() => {
+    setAddress(null);
+    setProvider(null);
+    setSelectedWalletName(null);
   }, []);
 
-  const disconnect = useCallback(() => setAddress(null), []);
+  useEffect(() => {
+    let announced = false;
+    const announce = (event: Event) => {
+      const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
+      if (
+        !detail?.provider ||
+        typeof detail.info?.uuid !== "string" ||
+        typeof detail.info.name !== "string" ||
+        typeof detail.info.rdns !== "string"
+      ) return;
+      announced = true;
+      setWallets((current) => upsertWallet(current, detail));
+    };
+    window.addEventListener("eip6963:announceProvider", announce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    const fallback = window.setTimeout(() => {
+      if (!announced && window.ethereum) {
+        setWallets((current) => current.length > 0 ? current : [legacyWallet(window.ethereum!)]);
+      }
+    }, 100);
+    return () => {
+      window.clearTimeout(fallback);
+      window.removeEventListener("eip6963:announceProvider", announce);
+    };
+  }, []);
 
   useEffect(() => {
-    const provider = window.ethereum;
     if (!provider?.on) return;
     const handler = (...args: unknown[]) => {
       const accounts = args[0] as string[] | undefined;
@@ -70,11 +113,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
     provider.on("accountsChanged", handler);
     return () => provider.removeListener?.("accountsChanged", handler);
-  }, []);
+  }, [provider]);
 
   const value = useMemo(
-    () => ({ address, connecting, error, hasProvider, connect, disconnect }),
-    [address, connecting, error, hasProvider, connect, disconnect],
+    () => ({
+      address,
+      connecting,
+      error,
+      hasProvider,
+      provider,
+      wallets,
+      selectedWalletName,
+      chooserOpen,
+      openChooser,
+      closeChooser,
+      chooseWallet,
+      disconnect,
+    }),
+    [
+      address,
+      connecting,
+      error,
+      hasProvider,
+      provider,
+      wallets,
+      selectedWalletName,
+      chooserOpen,
+      openChooser,
+      closeChooser,
+      chooseWallet,
+      disconnect,
+    ],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
@@ -87,6 +156,6 @@ export function useWallet(): WalletState {
 }
 
 /** Write-capable client bound to the connected account. */
-export function writeClient(account: Hex) {
-  return createClient({ chain: studionet, account });
+export function writeClient(account: Hex, provider: WalletProvider) {
+  return createClient({ chain: studionet, account, provider });
 }

@@ -341,6 +341,48 @@ dl.kv dd {
   gap: 12px;
 }
 
+.wallet-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 45%);
+}
+
+.wallet-dialog {
+  width: min(420px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
+}
+
+.wallet-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.wallet-dialog-heading h2 {
+  margin: 0;
+}
+
+.wallet-choice {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+}
+
 /* Mobile responsive breakpoint */
 @media (max-width: 720px) {
   .layout {

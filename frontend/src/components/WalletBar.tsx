@@ -2,17 +2,27 @@ import { useWallet } from "../lib/wallet";
 import { shortAddress } from "../lib/format";
 
 export function WalletBar() {
-  const { address, connect, disconnect, connecting, error, hasProvider } = useWallet();
+  const {
+    address,
+    openChooser,
+    disconnect,
+    connecting,
+    error,
+    hasProvider,
+    selectedWalletName,
+  } = useWallet();
 
   return (
     <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
       {address ? (
         <>
-          <div className="tile-label">Connected wallet</div>
+          <div className="tile-label">
+            Connected wallet{selectedWalletName ? ` · ${selectedWalletName}` : ""}
+          </div>
           <div className="mono" style={{ margin: "2px 0 8px" }}>
             {shortAddress(address)}
           </div>
-          <button type="button" onClick={disconnect}>
+          <button type="button" data-wallet-control onClick={disconnect}>
             Disconnect
           </button>
         </>
@@ -24,14 +34,15 @@ export function WalletBar() {
           <button
             type="button"
             className="primary"
-            onClick={() => void connect()}
-            disabled={connecting || !hasProvider}
+            data-wallet-control
+            onClick={openChooser}
+            disabled={connecting}
           >
-            {connecting ? "Connecting…" : "Connect wallet"}
+            {connecting ? "Connecting…" : "Choose wallet"}
           </button>
           {!hasProvider ? (
             <div className="tile-label" style={{ marginTop: 6 }}>
-              MetaMask not detected.
+              No injected browser wallet detected.
             </div>
           ) : null}
         </>

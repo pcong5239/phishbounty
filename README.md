@@ -126,7 +126,7 @@ upgradability. It runs locally against a pure-Python GenVM stub written for this
 mirrors real runtime semantics that unit tests would otherwise hide (for example, rejecting
 `Address(int)` and `DynArray(...)` construction).
 
-### Frontend transaction and onboarding test suite (13 tests)
+### Frontend transaction, onboarding, and wallet test suite (20 tests)
 
 ```bash
 cd frontend
@@ -138,7 +138,7 @@ gate (`FINALIZED` plus `FINISHED_WITH_RETURN`), failed execution results, missin
 bigint receipt data, `ERR_*` error identifier extraction, and unserializable receipt data. Two
 focused onboarding tests exercise the same write-intent builders used by the submitted client for
 `register_brand`, pool funding, bounty configuration, and report submission, plus the registration
-input bounds.
+input bounds. Seven wallet tests pin multi-provider discovery, dialog focus wrapping, and Studionet switching behavior.
 
 Both suites run locally and do not send transactions to Studionet. The Python
 tests use the repository’s GenVM stub; the frontend tests exercise the real
@@ -154,7 +154,8 @@ npm run dev      # http://localhost:5173
 npm run build
 ```
 
-Reads work without a wallet. Writes require MetaMask on Studionet. The interface advances
+Reads work without a wallet. For writes, the interface lets users choose among injected EIP-6963
+wallets (with a legacy `window.ethereum` fallback) and switches the selected wallet to Studionet. It advances
 only after a transaction is finalized **and** its execution result is success, and it shows
 the consensus stage rather than an open-ended spinner.
 

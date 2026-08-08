@@ -35,7 +35,7 @@ export function TxAction({
   onDone?: () => void;
   children?: ReactNode;
 }) {
-  const { address: account, connect, hasProvider } = useWallet();
+  const { address: account, provider, openChooser, hasProvider } = useWallet();
   const [progress, setProgress] = useState<TxProgress>({ stage: "idle" });
 
   const busy =
@@ -44,12 +44,12 @@ export function TxAction({
     progress.stage === "consensus";
 
   async function run() {
-    if (!account) {
-      await connect();
+    if (!account || !provider) {
+      openChooser();
       return;
     }
     try {
-      await sendWrite(account, address, functionName, args, value, setProgress);
+      await sendWrite(account, address, functionName, args, value, provider, setProgress);
       onDone?.();
     } catch {
       // sendWrite already pushed the error stage into progress state.
@@ -66,11 +66,11 @@ export function TxAction({
           onClick={() => void run()}
           disabled={busy || disabled}
         >
-          {busy ? "Working…" : account ? label : "Connect wallet to continue"}
+          {busy ? "Working…" : account ? label : "Choose wallet to continue"}
         </button>
         {!hasProvider ? (
           <span className="tile-label" style={{ display: "block", marginTop: 8 }}>
-            MetaMask required
+            No injected browser wallet detected
           </span>
         ) : null}
         {disabled && disabledReason ? (

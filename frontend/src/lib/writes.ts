@@ -1,6 +1,7 @@
 import { TransactionStatus } from "genlayer-js/types";
 import { executionFailure } from "./execution-result";
 import { writeClient } from "./wallet";
+import type { WalletProvider } from "./wallet-providers";
 
 type Hex = `0x${string}`;
 
@@ -29,9 +30,10 @@ export async function sendWrite(
   functionName: string,
   args: unknown[],
   value: bigint,
+  provider: WalletProvider,
   onProgress: (p: TxProgress) => void,
 ): Promise<{ hash: string }> {
-  const client = writeClient(account);
+  const client = writeClient(account, provider);
 
   onProgress({ stage: "signing", message: "Waiting for wallet signature…" });
   const hash = (await client.writeContract({
